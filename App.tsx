@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { Linking } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { applySessionFromUrl } from "./lib/authLinking";
 import AuthScreen from "./components/AuthScreen";
 import RecordScreen from "./components/RecordScreen";
 
@@ -18,17 +16,7 @@ export default function App() {
       setSession(next);
     });
 
-    Linking.getInitialURL().then((url) => {
-      if (url) applySessionFromUrl(url);
-    });
-    const linkSub = Linking.addEventListener("url", ({ url }) => {
-      applySessionFromUrl(url);
-    });
-
-    return () => {
-      authSub.subscription.unsubscribe();
-      linkSub.remove();
-    };
+    return () => authSub.subscription.unsubscribe();
   }, []);
 
   if (session === undefined) return null;

@@ -7,32 +7,48 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as Linking from "expo-linking";
 import { supabase } from "../lib/supabase";
 import { INK, OFFWHITE } from "../lib/theme";
 
+type Step = "email" | "code";
+
 export default function AuthScreen() {
+  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const redirectTo = Linking.createURL("auth-callback");
-
+  // ディープリンク（exp://）のリダイレクト一致が不安定なため、6桁コード入力に統一。
+  // emailRedirectTo を渡さなければメールのリンクではなく数字コードが主導線になる。
   async function handleSend() {
     if (!email.trim()) return;
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
     setLoading(false);
     if (error) {
       setError("送れなかった。もう一度。");
       return;
     }
-    setSent(true);
+    setStep("code");
+  }
+
+  async function handleVerify() {
+    if (!code.trim()) return;
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: "email",
+    });
+    setLoading(false);
+    if (error) {
+      setError("コードが違う。もう一度。");
+      return;
+    }
+    // 成功時は App.tsx の onAuthStateChange が session を拾う
   }
 
   return (
@@ -40,13 +56,7 @@ export default function AuthScreen() {
       <View style={styles.body}>
         <Text style={styles.title}>YUZU</Text>
 
-        {sent ? (
-          <>
-            <Text style={styles.h2}>SENT</Text>
-            <Text style={styles.sub}>メールを送った。{"\n"}確認しろ。</Text>
-            <Text style={styles.hint}>{email}</Text>
-          </>
-        ) : (
+        {step === "email" ? (
           <>
             <Text style={styles.h2}>MAIL</Text>
             <Text style={styles.sub}>アドレスを入れろ</Text>
@@ -70,10 +80,33 @@ export default function AuthScreen() {
               <Text style={styles.buttonLabel}>{loading ? "送信中..." : "送れ"}</Text>
             </Pressable>
           </>
+        ) : (
+          <>
+            <Text style={styles.h2}>CODE</Text>
+            <Text style={styles.sub}>{email}{"\n"}に届いた6桁を入れろ</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="123456"
+              placeholderTextColor="#1A1A2E66"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={code}
+              onChangeText={setCode}
+              editable={!loading}
+            />
+            {error !== "" && <Text style={styles.error}>{error}</Text>}
+            <Pressable
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={handleVerify}
+              disabled={loading || code.trim().length < 6}
+            >
+              <Text style={styles.buttonLabel}>{loading ? "確認中..." : "確認"}</Text>
+            </Pressable>
+            <Pressable onPress={() => { setStep("email"); setCode(""); setError(""); }} disabled={loading}>
+              <Text style={styles.back}>戻る</Text>
+            </Pressable>
+          </>
         )}
-
-        {/* デバッグ用：この URL を Supabase の Redirect URLs に追加しないと #100 のコールバックが拒否される */}
-        <Text style={styles.debug}>{redirectTo}</Text>
       </View>
     </SafeAreaView>
   );
@@ -85,7 +118,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "900", color: INK, letterSpacing: 1 },
   h2: { fontSize: 20, fontWeight: "800", color: INK, marginTop: 8 },
   sub: { fontSize: 14, color: INK, opacity: 0.7, textAlign: "center" },
-  hint: { fontSize: 14, color: INK, fontWeight: "600" },
   input: {
     width: "100%",
     borderWidth: 1,
@@ -95,6 +127,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: INK,
+    textAlign: "center",
   },
   error: { color: "#C0392B", fontSize: 13 },
   button: {
@@ -107,5 +140,5 @@ const styles = StyleSheet.create({
   },
   buttonPressed: { opacity: 0.85 },
   buttonLabel: { color: OFFWHITE, fontWeight: "700", fontSize: 15 },
-  debug: { fontSize: 10, color: INK, opacity: 0.35, marginTop: 24, textAlign: "center" },
+  back: { fontSize: 13, color: INK, opacity: 0.5, marginTop: 4 },
 });
