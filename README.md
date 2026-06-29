@@ -2,13 +2,28 @@
 
 [YUZU 本体](https://github.com/studiocon/yuzu-app) のネイティブアプリ。方式は [#64](https://github.com/studiocon/yuzu-app/issues/64) で **Expo / React Native** に決定済み。
 
-最初のマイルストーンは検証スパイク：**長押し録音 → Haptics → ElevenLabs STT（yuzu-app の `/api/transcribe` を直接叩く）が1本通るか**だけを確認する。UI・認証・永続化は作り込まない。
+最初のマイルストーンは検証スパイク：**Magic Link ログイン → 長押し録音 → Haptics → STT → /api/records 保存**が1本通るかを確認する。UI は作り込まない。
 
 ## 構成
 
 - バックエンドは作らない。既存の [yuzu-app](https://github.com/studiocon/yuzu-app) の API（`https://app.yuzu.style/api/*`）をそのまま使う
-- 認証は未実装。`/api/transcribe` の未ログイン anon 経路（cookie ベースで日次上限あり）で検証する
+- 認証は Magic Link（Supabase `signInWithOtp`）。`/api/transcribe`・`/api/records` は Bearer トークン認証に対応済み（yuzu-app [#100](https://github.com/studiocon/yuzu-app/issues/100)）
+- セッションは `expo-secure-store` + `AsyncStorage` の LargeSecureStore パターンで永続化（[lib/supabase.ts](lib/supabase.ts)）
 - `lib/` 配下の DOM 非依存ロジック（period.ts 等）は後続フェーズで yuzu-app からコピーして使う想定（今はまだ持ち込んでいない）
+
+## セットアップ
+
+```bash
+cp .env.example .env  # 値は yuzu-app の .env.local の NEXT_PUBLIC_SUPABASE_* と同じ
+npm install
+```
+
+### Magic Link を使うための一回限りの設定
+
+Supabase の **Authentication → URL Configuration → Redirect URLs** に、アプリ起動中に AuthScreen 下部に表示される URL（例: `exp://192.168.11.14:8081/--/auth-callback`）を追加する。
+[ダッシュボードを開く](https://supabase.com/dashboard/project/serdimqyazitwfnswvrg/auth/url-configuration)
+
+⚠️ Expo Go 開発中はこの URL に Mac の LAN IP が入るため、**Wi-Fi を変えたら再登録が必要**。スタンドアロンビルドに移行すれば `style.yuzu.mobile://auth-callback` の固定 URL になる。
 
 ## 実機で動かす
 
@@ -44,8 +59,9 @@ npm run ios
 
 ## チェックポイント（#64 検証項目）
 
+- [ ] Magic Link メールのリンクをタップして Expo Go に戻り、ログイン状態になるか
 - [ ] 長押し → IMPACT MEDIUM が「録音開始」の手応えとして十分か
 - [ ] リリース → NOTIFICATION SUCCESS が「録音完了」の余韻として十分か
-- [ ] `/api/transcribe` への multipart アップロードが通り、文字起こしが返るか
+- [ ] `/api/transcribe` → `/api/records` が通り、保存された INDEX が返るか
+- [ ] アプリ再起動後もログイン状態が保持されるか（LargeSecureStore）
 - [ ] バックグラウンド/割り込み（電話・通知）時の録音挙動
-- [ ] ネイティブでの Supabase Auth セッション保持（次フェーズ、[#100](https://github.com/studiocon/yuzu-app/issues/100)）
