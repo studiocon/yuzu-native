@@ -14,19 +14,33 @@
 
 ⚠️ Haptics は **iOS Simulator では鳴らない**。物理 iPhone 必須。
 
+### 最速：Expo Go（署名不要・再インストール不要）
+
+`expo-audio` / `expo-haptics` はどちらも Expo Go にバンドルされている標準モジュールなので、Xcode 不要・証明書の7日失効も無い。「しばらく実機で触る」検証はこれで十分。
+
+1. iPhone に App Store から **Expo Go** をインストール
+2. Mac で:
+   ```bash
+   npm install
+   npx expo start
+   ```
+3. 表示される QR を iPhone のカメラで読み取る → Expo Go で起動
+
+### 本格ビルド（TestFlight 提出前の確認・Expo Go の制約を超える検証用）
+
+Expo Go では試せない挙動（Bundle ID 固有の権限文言、スタンドアロンでの起動速度等）を見たい時に使う。
+
 ```bash
-npm install
 npm run ios
 ```
 
 初回は Xcode が開くので：
 
 1. `App` ターゲット → Signing & Capabilities → Team を自分の Apple ID に設定
-2. Bundle Identifier が衝突したら変更
-3. iPhone を USB 接続 → デバイス選択 → ▶ 実行
-4. iPhone 側「設定 → 一般 → VPN とデバイス管理」で証明書を信頼
+2. iPhone を USB 接続 → デバイス選択 → ▶ 実行
+3. iPhone 側「設定 → 一般 → VPN とデバイス管理」で証明書を信頼
 
-無料 Apple ID（Personal Team）の場合、7日ごとに再インストールが必要。長く実機に置いておくには Apple Developer Program（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）への加入を検討。
+無料 Apple ID（Personal Team）の場合、7日ごとに再インストールが必要。TestFlight に進むには Apple Developer Program（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）への加入が必須。
 
 ## チェックポイント（#64 検証項目）
 
