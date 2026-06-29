@@ -8,14 +8,16 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "style.yuzu.native",
+      "bundleIdentifier": "style.yuzu.mobile",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "声を記録に刻むために使う。"
       }
     },
     "android": {
-      "package": "style.yuzu.native",
-      "permissions": ["RECORD_AUDIO"],
+      "package": "style.yuzu.mobile",
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -28,7 +30,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }
