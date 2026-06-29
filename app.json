@@ -1,15 +1,21 @@
 {
   "expo": {
-    "name": "yuzu-native",
+    "name": "YUZU",
     "slug": "yuzu-native",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "style.yuzu.native",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "声を記録に刻むために使う。"
+      }
     },
     "android": {
+      "package": "style.yuzu.native",
+      "permissions": ["RECORD_AUDIO"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +26,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }
