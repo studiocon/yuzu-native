@@ -83,13 +83,13 @@ export default function AuthScreen() {
         ) : (
           <>
             <Text style={styles.h2}>CODE</Text>
-            <Text style={styles.sub}>{email}{"\n"}に届いた6桁を入れろ</Text>
+            <Text style={styles.sub}>{email}{"\n"}に届いたコードを入れろ</Text>
             <TextInput
               style={styles.input}
-              placeholder="123456"
+              placeholder="12345678"
               placeholderTextColor="#1A1A2E66"
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={10}
               value={code}
               onChangeText={setCode}
               editable={!loading}
@@ -98,7 +98,7 @@ export default function AuthScreen() {
             <Pressable
               style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
               onPress={handleVerify}
-              disabled={loading || code.trim().length < 6}
+              disabled={loading || code.trim().length < 4}
             >
               <Text style={styles.buttonLabel}>{loading ? "確認中..." : "確認"}</Text>
             </Pressable>
