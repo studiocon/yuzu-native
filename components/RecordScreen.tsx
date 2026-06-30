@@ -31,10 +31,17 @@ type LogEntry = {
   createdAt: number;
 };
 
+type Stats = {
+  streak: number;
+  todayCount: number;
+  maxDaily: number;
+};
+
 export default function RecordScreen({ session }: { session: Session }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
@@ -58,6 +65,13 @@ export default function RecordScreen({ session }: { session: Session }) {
           createdAt: p.createdAt,
         })),
       );
+      if (typeof data?.streak === "number") {
+        setStats({
+          streak: data.streak,
+          todayCount: data.todayCount ?? 0,
+          maxDaily: data.maxDaily ?? 0,
+        });
+      }
     } catch {
       // 一覧取得失敗は録音フローを止めない。silent skip。
     }
@@ -154,6 +168,13 @@ export default function RecordScreen({ session }: { session: Session }) {
         const errCode = saveData?.error;
         if (errCode === "daily_limit") {
           setText(`今日はここまで（${saveRes.status}）`);
+          if (typeof saveData?.todayCount === "number") {
+            setStats((prev) => ({
+              streak: prev?.streak ?? 0,
+              todayCount: saveData.todayCount,
+              maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
+            }));
+          }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
           setText("ログインし直せ");
         } else {
@@ -164,6 +185,13 @@ export default function RecordScreen({ session }: { session: Session }) {
 
       setPhase("carved");
       setText(`#${saveData.post.index}　${transcript}`);
+      if (typeof saveData?.streak === "number") {
+        setStats((prev) => ({
+          streak: saveData.streak,
+          todayCount: saveData.todayCount ?? prev?.todayCount ?? 0,
+          maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
+        }));
+      }
       fetchLogs();
     } catch {
       setPhase("error");
@@ -179,6 +207,13 @@ export default function RecordScreen({ session }: { session: Session }) {
           <View style={styles.header}>
             <Text style={styles.title}>YUZU</Text>
             <Text style={styles.sub}>{session.user.email}</Text>
+
+            {stats && (
+              <View style={styles.statsRow}>
+                <Text style={styles.statsText}>STREAK {stats.streak}</Text>
+                <Text style={styles.statsText}>{Math.max(0, stats.maxDaily - stats.todayCount)} LEFT</Text>
+              </View>
+            )}
 
             <Pressable
               onPressIn={handlePressIn}
@@ -223,6 +258,8 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", gap: 24, paddingBottom: 16 },
   title: { fontSize: 32, fontWeight: "900", color: INK, letterSpacing: 1 },
   sub: { fontSize: 12, color: INK, opacity: 0.5, letterSpacing: 1 },
+  statsRow: { flexDirection: "row", gap: 16 },
+  statsText: { fontSize: 12, fontWeight: "700", color: INK, opacity: 0.6, letterSpacing: 1 },
   fab: {
     width: 140,
     height: 140,
