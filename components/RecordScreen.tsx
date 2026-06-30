@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   AppState,
+  Easing,
   FlatList,
   Pressable,
   RefreshControl,
@@ -58,6 +60,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logsLoaded, setLogsLoaded] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -66,6 +69,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   const startedAtRef = useRef(0);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -93,12 +98,60 @@ export default function RecordScreen({ session }: { session: Session }) {
       }
     } catch {
       // 一覧取得失敗は録音フローを止めない。silent skip。
+    } finally {
+      setLogsLoaded(true);
     }
   }, [session.access_token]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  // 録音中: mic-recording-pulse（scale 1 → 1.04 をループ）
+  useEffect(() => {
+    if (phase !== "recording") {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.04,
+          duration: 700,
+          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, pulseAnim]);
+
+  // 変換中（CARVING）: spinner-rotate（360度を 0.9s でループ）
+  useEffect(() => {
+    if (phase !== "carving") {
+      spinAnim.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [phase, spinAnim]);
+
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する
   useEffect(() => {
@@ -279,19 +332,25 @@ export default function RecordScreen({ session }: { session: Session }) {
               </View>
             )}
 
-            <Pressable
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-              disabled={limitReached}
-              style={({ pressed }) => [
-                styles.fab,
-                phase === "recording" && styles.fabRecording,
-                limitReached && styles.fabDisabled,
-                pressed && styles.fabPressed,
-              ]}
-            >
-              <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
-            </Pressable>
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <Pressable
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                disabled={limitReached || phase === "carving"}
+                style={({ pressed }) => [
+                  styles.fab,
+                  phase === "recording" && styles.fabRecording,
+                  limitReached && styles.fabDisabled,
+                  pressed && styles.fabPressed,
+                ]}
+              >
+                {phase === "carving" ? (
+                  <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
+                ) : (
+                  <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
+                )}
+              </Pressable>
+            </Animated.View>
 
             {phaseLabel ? (
               <Text style={styles.pill}>{phaseLabel}</Text>
@@ -306,11 +365,19 @@ export default function RecordScreen({ session }: { session: Session }) {
             </Pressable>
 
             {logs.length > 0 && <Text style={styles.logHeader}>LOG</Text>}
+            {logsLoaded && logs.length === 0 && <Text style={styles.empty}>話せ</Text>}
           </View>
         }
         data={logs}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.inkMuted}
+            colors={[colors.yuzuZest]}
+          />
+        }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => handleToggleMark(item)}
@@ -362,6 +429,14 @@ const styles = StyleSheet.create({
   fabRecording: { backgroundColor: colors.yuzuZest },
   fabDisabled: { opacity: 0.3 },
   fabPressed: { transform: [{ scale: 0.94 }] },
+  spinner: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: "rgba(26,26,46,0.25)",
+    borderTopColor: colors.ink,
+  },
   pill: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
@@ -395,4 +470,5 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.wide,
   },
   logText: { fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
+  empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.xl },
 });
