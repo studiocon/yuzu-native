@@ -29,6 +29,7 @@ type LogEntry = {
   text: string;
   index: number;
   createdAt: number;
+  marked: boolean;
 };
 
 type Stats = {
@@ -58,11 +59,12 @@ export default function RecordScreen({ session }: { session: Session }) {
       const data = await res.json();
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       setLogs(
-        posts.map((p: { id: string; text: string; index: number; createdAt: number }) => ({
+        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean }) => ({
           id: p.id,
           text: p.text,
           index: p.index,
           createdAt: p.createdAt,
+          marked: p.marked ?? false,
         })),
       );
       if (typeof data?.streak === "number") {
@@ -97,6 +99,25 @@ export default function RecordScreen({ session }: { session: Session }) {
     setRefreshing(true);
     await fetchLogs();
     setRefreshing(false);
+  }
+
+  async function handleToggleMark(entry: LogEntry) {
+    const next = !entry.marked;
+    setLogs((prev) => prev.map((l) => (l.id === entry.id ? { ...l, marked: next } : l)));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const res = await fetch(`${API_BASE}/api/records/${entry.id}/mark`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ marked: next }),
+      });
+      if (!res.ok) throw new Error("mark failed");
+    } catch {
+      setLogs((prev) => prev.map((l) => (l.id === entry.id ? { ...l, marked: !next } : l)));
+    }
   }
 
   async function handlePressIn() {
@@ -242,10 +263,16 @@ export default function RecordScreen({ session }: { session: Session }) {
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         renderItem={({ item }) => (
-          <View style={styles.logRow}>
-            <Text style={styles.logIndex}>#{item.index}</Text>
+          <Pressable
+            onPress={() => handleToggleMark(item)}
+            style={({ pressed }) => [styles.logRow, pressed && styles.logRowPressed]}
+          >
+            <View style={styles.logRowHead}>
+              <Text style={styles.logIndex}>#{item.index}</Text>
+              {item.marked && <Text style={styles.logMarked}>MARK</Text>}
+            </View>
             <Text style={styles.logText} numberOfLines={3}>{item.text}</Text>
-          </View>
+          </Pressable>
         )}
       />
     </SafeAreaView>
@@ -276,6 +303,9 @@ const styles = StyleSheet.create({
   signOut: { fontSize: 13, color: INK, opacity: 0.5, marginTop: 16 },
   logHeader: { fontSize: 14, fontWeight: "700", color: INK, letterSpacing: 2, alignSelf: "flex-start" },
   logRow: { borderTopWidth: 1, borderTopColor: "#1A1A2E22", paddingVertical: 12, gap: 4 },
+  logRowPressed: { opacity: 0.6 },
+  logRowHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   logIndex: { fontSize: 12, fontWeight: "700", color: INK, opacity: 0.5 },
+  logMarked: { fontSize: 11, fontWeight: "700", color: ZEST, letterSpacing: 1 },
   logText: { fontSize: 15, color: INK },
 });
