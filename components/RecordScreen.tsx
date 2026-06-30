@@ -130,7 +130,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       const sttData = await sttRes.json();
       if (!sttRes.ok) {
         setPhase("error");
-        setText(sttData?.message ?? sttData?.error ?? "STT 失敗");
+        setText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
         return;
       }
       const transcript: string = sttData.text || "";
@@ -151,7 +151,14 @@ export default function RecordScreen({ session }: { session: Session }) {
       const saveData = await saveRes.json();
       if (!saveRes.ok) {
         setPhase("error");
-        setText(saveData?.error ?? "保存失敗");
+        const errCode = saveData?.error;
+        if (errCode === "daily_limit") {
+          setText(`今日はここまで（${saveRes.status}）`);
+        } else if (saveRes.status === 401 || errCode === "unauthorized") {
+          setText("ログインし直せ");
+        } else {
+          setText(`保存失敗（${saveRes.status}）`);
+        }
         return;
       }
 
