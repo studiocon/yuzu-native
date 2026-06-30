@@ -2,6 +2,7 @@
   "expo": {
     "name": "YUZU",
     "slug": "yuzu-native",
+    "scheme": "yuzu",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
