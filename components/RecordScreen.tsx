@@ -41,12 +41,20 @@ type LogEntry = {
   index: number;
   createdAt: number;
   marked: boolean;
+  durationMs: number;
 };
 
 type Stats = {
   streak: number;
   todayCount: number;
   maxDaily: number;
+  totalCount: number;
+  totalMinutes: number;
+};
+
+type CarvedPost = {
+  index: number;
+  text: string;
 };
 
 // 状態 pill は RECORDING → CARVING → CARVED の英語のみ（句点なし）。idle/error は日本語の地の文で表す。
@@ -56,9 +64,18 @@ const PHASE_LABEL: Partial<Record<Phase, string>> = {
   carved: "CARVED",
 };
 
+// m:ss 表記。durationMs <= 0（旧データ）は呼び出し側で非表示にする。
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function RecordScreen({ session }: { session: Session }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState("");
+  const [carvedPost, setCarvedPost] = useState<CarvedPost | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -81,12 +98,13 @@ export default function RecordScreen({ session }: { session: Session }) {
       const data = await res.json();
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       setLogs(
-        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean }) => ({
+        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number }) => ({
           id: p.id,
           text: p.text,
           index: p.index,
           createdAt: p.createdAt,
           marked: p.marked ?? false,
+          durationMs: p.durationMs ?? 0,
         })),
       );
       if (typeof data?.streak === "number") {
@@ -94,6 +112,8 @@ export default function RecordScreen({ session }: { session: Session }) {
           streak: data.streak,
           todayCount: data.todayCount ?? 0,
           maxDaily: data.maxDaily ?? 0,
+          totalCount: typeof data.totalCount === "number" ? data.totalCount : 0,
+          totalMinutes: typeof data.totalDurationMs === "number" ? Math.round(data.totalDurationMs / 60000) : 0,
         });
       }
     } catch {
@@ -208,6 +228,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     startedAtRef.current = Date.now();
     setPhase("recording");
     setText("");
+    setCarvedPost(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // 録音開始の準備中（権限確認〜prepareToRecordAsync）に指が離れている、
@@ -282,6 +303,8 @@ export default function RecordScreen({ session }: { session: Session }) {
               streak: prev?.streak ?? 0,
               todayCount: saveData.todayCount,
               maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
+              totalCount: prev?.totalCount ?? 0,
+              totalMinutes: prev?.totalMinutes ?? 0,
             }));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
@@ -293,12 +316,14 @@ export default function RecordScreen({ session }: { session: Session }) {
       }
 
       setPhase("carved");
-      setText(`#${saveData.post.index}　${transcript}`);
+      setCarvedPost({ index: saveData.post.index, text: transcript });
       if (typeof saveData?.streak === "number") {
         setStats((prev) => ({
           streak: saveData.streak,
           todayCount: saveData.todayCount ?? prev?.todayCount ?? 0,
           maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
+          totalCount: prev?.totalCount ?? 0,
+          totalMinutes: prev?.totalMinutes ?? 0,
         }));
       }
       fetchLogs();
@@ -309,6 +334,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   }
 
   const phaseLabel = limitReached ? undefined : PHASE_LABEL[phase];
+  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -322,12 +348,16 @@ export default function RecordScreen({ session }: { session: Session }) {
             {stats && (
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>STREAK</Text>
-                  <Text style={styles.statValue}>{stats.streak}</Text>
+                  <Text style={styles.statLabel}>RECORDS</Text>
+                  <Text style={styles.statValue}>{stats.totalCount}</Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>LEFT</Text>
-                  <Text style={styles.statValue}>{Math.max(0, stats.maxDaily - stats.todayCount)}</Text>
+                  <Text style={styles.statLabel}>MINUTES</Text>
+                  <Text style={styles.statValue}>{stats.totalMinutes}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>STREAK</Text>
+                  <Text style={styles.statValue}>{stats.streak}</Text>
                 </View>
               </View>
             )}
@@ -356,6 +386,18 @@ export default function RecordScreen({ session }: { session: Session }) {
               <Text style={styles.pill}>{phaseLabel}</Text>
             ) : (
               <Text style={styles.hint}>{limitReached ? "今日はここまで" : "長押し。話せ"}</Text>
+            )}
+
+            {/* 残り回数は 3 回未満のときだけ出す（copy ルール） */}
+            {!limitReached && stats && remaining > 0 && remaining < 3 && (
+              <Text style={styles.leftHint}>{remaining} LEFT</Text>
+            )}
+
+            {phase === "carved" && carvedPost && (
+              <View style={styles.carvedCard}>
+                <Text style={styles.carvedIndex}>#{String(carvedPost.index).padStart(3, "0")}</Text>
+                <Text style={styles.carvedText}>{carvedPost.text}</Text>
+              </View>
             )}
 
             {text !== "" && <Text style={styles.result}>{text}</Text>}
@@ -389,7 +431,10 @@ export default function RecordScreen({ session }: { session: Session }) {
           >
             <View style={styles.logRowHead}>
               <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
-              {item.marked && <PushPinIcon size={14} color={colors.yuzuZest} weight="fill" />}
+              <View style={styles.logRowHeadRight}>
+                {item.marked && <PushPinIcon size={14} color={colors.yuzuZest} weight="fill" />}
+                {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
+              </View>
             </View>
             <Text style={styles.logText} numberOfLines={3}>{item.text}</Text>
           </Pressable>
@@ -405,8 +450,31 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", gap: spacing.xl, paddingBottom: spacing.lg },
   title: { fontFamily: fonts.displayBlack, fontSize: fontSize.xxl, color: colors.ink },
   sub: { fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: fontSize.xs * letterSpacing.wide },
-  statsRow: { flexDirection: "row", gap: spacing.xl },
-  statCard: { alignItems: "center", gap: spacing.xs },
+  statsRow: { flexDirection: "row", gap: spacing.lg },
+  statCard: { alignItems: "center", gap: spacing.xs, minWidth: 64 },
+  leftHint: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+  },
+  carvedCard: {
+    width: "100%",
+    backgroundColor: colors.ink,
+    borderRadius: radius.card,
+    padding: 22,
+    gap: spacing.sm,
+  },
+  carvedIndex: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xl,
+    color: colors.yuzuWhite,
+  },
+  carvedText: {
+    fontSize: fontSize.base,
+    color: "rgba(255,255,255,0.92)",
+    lineHeight: fontSize.base * 1.75,
+  },
   statLabel: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
@@ -462,9 +530,16 @@ const styles = StyleSheet.create({
   logRow: { borderTopWidth: 1, borderTopColor: colors.divider, paddingVertical: spacing.md, gap: spacing.xs },
   logRowMarked: { borderTopColor: colors.yuzuZest },
   logRowPressed: { backgroundColor: colors.surfaceHover },
-  logRowHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  logRowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  logRowHeadRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   logIndex: {
     fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.wide,
+  },
+  logDuration: {
+    fontFamily: fonts.displayRegular,
     fontSize: fontSize.xs,
     color: colors.inkMuted,
     letterSpacing: fontSize.xs * letterSpacing.wide,
