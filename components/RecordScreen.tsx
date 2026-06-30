@@ -46,6 +46,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [refreshing, setRefreshing] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
+  const pendingReleaseRef = useRef(false);
   const startedAtRef = useRef(0);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
@@ -124,6 +125,7 @@ export default function RecordScreen({ session }: { session: Session }) {
 
   async function handlePressIn() {
     if (phase === "carving" || limitReached) return;
+    pendingReleaseRef.current = false;
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setPhase("error");
@@ -138,11 +140,26 @@ export default function RecordScreen({ session }: { session: Session }) {
     setPhase("recording");
     setText("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // 録音開始の準備中（権限確認〜prepareToRecordAsync）に指が離れている、
+    // つまり armedRef が立つ前に handlePressOut が来ていた場合はここで即座に止める。
+    // でないと pressOut イベントは二度と来ず、録音が止められなくなる。
+    if (pendingReleaseRef.current) {
+      await finishRecording();
+    }
   }
 
-  async function handlePressOut() {
-    if (!armedRef.current) return;
+  function handlePressOut() {
+    if (!armedRef.current) {
+      pendingReleaseRef.current = true;
+      return;
+    }
+    finishRecording();
+  }
+
+  async function finishRecording() {
     armedRef.current = false;
+    pendingReleaseRef.current = false;
     await recorder.stop();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
