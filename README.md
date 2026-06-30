@@ -10,7 +10,8 @@
 - 認証は **メールOTP（数字コード。桁数はメールテンプレート依存、入力欄は最大10桁まで許容）**。Supabase `signInWithOtp` → `verifyOtp`。Magic Link（タップ式）はカスタムスキーム `exp://` の redirect_to が Supabase 側で握り潰され Site URL にフォールバックする現象が実機で確認されたため不採用（ディープリンクに依存しない方式に統一）
 - `/api/transcribe`・`/api/records` は Bearer トークン認証に対応済み（yuzu-app [#100](https://github.com/studiocon/yuzu-app/issues/100)）
 - セッションは `expo-secure-store` + `AsyncStorage` の LargeSecureStore パターンで永続化（[lib/supabase.ts](lib/supabase.ts)）
-- 録音保存後は `GET /api/records` で直近のログ一覧（LOG）・STREAK・残り回数（LEFT）を取得して表示（[components/RecordScreen.tsx](components/RecordScreen.tsx)）。1日上限超過時のエラーコピーは yuzu-app の `app/page.tsx` と同じ文言に統一
+- 録音保存後は `GET /api/records` で直近のログ一覧（LOG）・STATS（RECORDS/MINUTES/STREAK）・残り回数（LEFT）を取得して表示（[components/RecordScreen.tsx](components/RecordScreen.tsx)）。1日上限超過時のエラーコピーは yuzu-app の `app/page.tsx` と同じ文言に統一
+- LOG カードをタップすると yuzu-app の IndexDetailModal 相当の全文表示モーダル（[components/IndexDetailModal.tsx](components/IndexDetailModal.tsx)）が開く。MARK（ピン留め）と COPY（クリップボードコピー、Notion移行期間限定の一時機能）はここに集約し、一覧カード自体にはボタンを置かない（yuzu-app と同じ設計）
 - 通話・通知などでアプリが background/inactive に遷移した時は `AppState` を監視して録音を強制停止し、固まった状態にならないようにしている
 - `lib/` 配下の DOM 非依存ロジック（period.ts 等）は後続フェーズで yuzu-app からコピーして使う想定（今はまだ持ち込んでいない）
 - デザインは [yuzu-app の DESIGN.md](https://github.com/studiocon/yuzu-app/blob/main/DESIGN.md) を Source of Truth とし、`lib/theme.ts` にトークン化（カラー・タイプスケール・角丸・easing）。英字ラベル/数値は Unbounded（`@expo-google-fonts/unbounded`）、アイコンは Phosphor（`phosphor-react-native`）に統一。**LINE Seed JP（日本語本文用フォント）はフォントファイル未取得のためネイティブには未バンドル**で、日本語テキストは OS 標準フォントにフォールバックしている（Web 版は Google Fonts CDN から読むため未対応で問題にならないが、Native は CDN `<link>` が使えないため要対応）

@@ -18,7 +18,7 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from "expo-audio";
-import { MicrophoneIcon, PushPinIcon } from "phosphor-react-native";
+import { MicrophoneIcon } from "phosphor-react-native";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import {
@@ -31,6 +31,8 @@ import {
   spacing,
 } from "../lib/theme";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
+import { formatDuration } from "../lib/stats";
+import IndexDetailModal from "./IndexDetailModal";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
@@ -43,6 +45,7 @@ type LogEntry = {
   createdAt: number;
   marked: boolean;
   durationMs: number;
+  charCount: number;
 };
 
 type Stats = {
@@ -65,14 +68,6 @@ const PHASE_LABEL: Partial<Record<Phase, string>> = {
   carved: "CARVED",
 };
 
-// m:ss 表記。durationMs <= 0（旧データ）は呼び出し側で非表示にする。
-function formatDuration(ms: number): string {
-  const totalSec = Math.round(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 // LOG カード本文下の擬似「声紋」。録音長に比例した本数、id 由来の決定的な高さ。
 function Voiceprint({ id, durationMs }: { id: string; durationMs: number }) {
   const barCount = voiceprintBarCount(durationMs);
@@ -94,6 +89,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [firstPostAt, setFirstPostAt] = useState<number | null>(null);
+  const [selectedPost, setSelectedPost] = useState<LogEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
@@ -113,22 +110,26 @@ export default function RecordScreen({ session }: { session: Session }) {
       const data = await res.json();
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       setLogs(
-        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number }) => ({
+        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number; char_count?: number }) => ({
           id: p.id,
           text: p.text,
           index: p.index,
           createdAt: p.createdAt,
           marked: p.marked ?? false,
           durationMs: p.durationMs ?? 0,
+          charCount: p.char_count ?? 0,
         })),
       );
+      if (typeof data?.firstPostAt === "number") {
+        setFirstPostAt(data.firstPostAt);
+      }
       if (typeof data?.streak === "number") {
         setStats({
           streak: data.streak,
           todayCount: data.todayCount ?? 0,
           maxDaily: data.maxDaily ?? 0,
           totalCount: typeof data.totalCount === "number" ? data.totalCount : 0,
-          totalMinutes: typeof data.totalDurationMs === "number" ? Math.round(data.totalDurationMs / 60000) : 0,
+          totalMinutes: typeof data.totalDurationMs === "number" ? Math.floor(data.totalDurationMs / 60000) : 0,
         });
       }
     } catch {
@@ -206,22 +207,24 @@ export default function RecordScreen({ session }: { session: Session }) {
     setRefreshing(false);
   }
 
-  async function handleToggleMark(entry: LogEntry) {
-    const next = !entry.marked;
-    setLogs((prev) => prev.map((l) => (l.id === entry.id ? { ...l, marked: next } : l)));
+  // MARK の確定状態は IndexDetailModal 側（PushPin トグル）で決める。ここはサーバ反映と一覧の同期だけ担う。
+  async function applyMark(id: string, marked: boolean) {
+    setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked } : l)));
+    setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked } : prev));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const res = await fetch(`${API_BASE}/api/records/${entry.id}/mark`, {
+      const res = await fetch(`${API_BASE}/api/records/${id}/mark`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ marked: next }),
+        body: JSON.stringify({ marked }),
       });
       if (!res.ok) throw new Error("mark failed");
     } catch {
-      setLogs((prev) => prev.map((l) => (l.id === entry.id ? { ...l, marked: !next } : l)));
+      setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked: !marked } : l)));
+      setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked: !marked } : prev));
     }
   }
 
@@ -437,7 +440,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         }
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => handleToggleMark(item)}
+            onPress={() => setSelectedPost(item)}
             style={({ pressed }) => [
               styles.logRow,
               item.marked && styles.logRowMarked,
@@ -446,15 +449,19 @@ export default function RecordScreen({ session }: { session: Session }) {
           >
             <View style={styles.logRowHead}>
               <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
-              <View style={styles.logRowHeadRight}>
-                {item.marked && <PushPinIcon size={14} color={colors.yuzuZest} weight="fill" />}
-                {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
-              </View>
+              {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
             </View>
-            <Text style={styles.logText} numberOfLines={3}>{item.text}</Text>
+            <Text style={styles.logText} numberOfLines={5}>{item.text}</Text>
             <Voiceprint id={item.id} durationMs={item.durationMs} />
           </Pressable>
         )}
+      />
+
+      <IndexDetailModal
+        post={selectedPost}
+        firstPostAt={firstPostAt}
+        onClose={() => setSelectedPost(null)}
+        onToggleMark={(updated) => applyMark(updated.id, updated.marked)}
       />
     </SafeAreaView>
   );
@@ -547,7 +554,6 @@ const styles = StyleSheet.create({
   logRowMarked: { borderTopColor: colors.yuzuZest },
   logRowPressed: { backgroundColor: colors.surfaceHover },
   logRowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  logRowHeadRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   logIndex: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
