@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -38,6 +39,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
   const startedAtRef = useRef(0);
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -63,6 +66,18 @@ export default function RecordScreen({ session }: { session: Session }) {
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active" || !armedRef.current) return;
+      armedRef.current = false;
+      recorderRef.current.stop().catch(() => {});
+      setPhase("error");
+      setText("中断された、もう一度");
+    });
+    return () => sub.remove();
+  }, []);
 
   async function handleRefresh() {
     setRefreshing(true);
