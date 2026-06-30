@@ -30,6 +30,7 @@ import {
   recordingGlowShadow,
   spacing,
 } from "../lib/theme";
+import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
@@ -70,6 +71,20 @@ function formatDuration(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// LOG カード本文下の擬似「声紋」。録音長に比例した本数、id 由来の決定的な高さ。
+function Voiceprint({ id, durationMs }: { id: string; durationMs: number }) {
+  const barCount = voiceprintBarCount(durationMs);
+  if (barCount === null) return null;
+  const heights = seededHeights(id, barCount);
+  return (
+    <View style={styles.voiceprint}>
+      {heights.map((h, i) => (
+        <View key={i} style={[styles.voiceprintBar, { height: Math.max(1, Math.round(h * 20)) }]} />
+      ))}
+    </View>
+  );
 }
 
 export default function RecordScreen({ session }: { session: Session }) {
@@ -437,6 +452,7 @@ export default function RecordScreen({ session }: { session: Session }) {
               </View>
             </View>
             <Text style={styles.logText} numberOfLines={3}>{item.text}</Text>
+            <Voiceprint id={item.id} durationMs={item.durationMs} />
           </Pressable>
         )}
       />
@@ -545,5 +561,7 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.wide,
   },
   logText: { fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
+  voiceprint: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 20, marginTop: 2, opacity: 0.45 },
+  voiceprintBar: { flex: 1, minWidth: 1, backgroundColor: colors.inkMuted },
   empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.xl },
 });
