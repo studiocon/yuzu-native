@@ -16,9 +16,18 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from "expo-audio";
+import { MicrophoneIcon, PushPinIcon } from "phosphor-react-native";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { INK, OFFWHITE, ZEST } from "../lib/theme";
+import {
+  colors,
+  fontSize,
+  fonts,
+  letterSpacing,
+  radius,
+  recordingGlowShadow,
+  spacing,
+} from "../lib/theme";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
@@ -36,6 +45,13 @@ type Stats = {
   streak: number;
   todayCount: number;
   maxDaily: number;
+};
+
+// 状態 pill は RECORDING → CARVING → CARVED の英語のみ（句点なし）。idle/error は日本語の地の文で表す。
+const PHASE_LABEL: Partial<Record<Phase, string>> = {
+  recording: "RECORDING",
+  carving: "CARVING",
+  carved: "CARVED",
 };
 
 export default function RecordScreen({ session }: { session: Session }) {
@@ -239,6 +255,8 @@ export default function RecordScreen({ session }: { session: Session }) {
     }
   }
 
+  const phaseLabel = limitReached ? undefined : PHASE_LABEL[phase];
+
   return (
     <SafeAreaView style={styles.safe}>
       <FlatList
@@ -250,8 +268,14 @@ export default function RecordScreen({ session }: { session: Session }) {
 
             {stats && (
               <View style={styles.statsRow}>
-                <Text style={styles.statsText}>STREAK {stats.streak}</Text>
-                <Text style={styles.statsText}>{Math.max(0, stats.maxDaily - stats.todayCount)} LEFT</Text>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>STREAK</Text>
+                  <Text style={styles.statValue}>{stats.streak}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>LEFT</Text>
+                  <Text style={styles.statValue}>{Math.max(0, stats.maxDaily - stats.todayCount)}</Text>
+                </View>
               </View>
             )}
 
@@ -266,10 +290,14 @@ export default function RecordScreen({ session }: { session: Session }) {
                 pressed && styles.fabPressed,
               ]}
             >
-              <Text style={styles.fabLabel}>{phase === "recording" ? "" : "話せ"}</Text>
+              <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
             </Pressable>
 
-            <Text style={styles.pill}>{limitReached ? "今日はここまで" : phase.toUpperCase()}</Text>
+            {phaseLabel ? (
+              <Text style={styles.pill}>{phaseLabel}</Text>
+            ) : (
+              <Text style={styles.hint}>{limitReached ? "今日はここまで" : "長押し。話せ"}</Text>
+            )}
 
             {text !== "" && <Text style={styles.result}>{text}</Text>}
 
@@ -286,11 +314,15 @@ export default function RecordScreen({ session }: { session: Session }) {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => handleToggleMark(item)}
-            style={({ pressed }) => [styles.logRow, pressed && styles.logRowPressed]}
+            style={({ pressed }) => [
+              styles.logRow,
+              item.marked && styles.logRowMarked,
+              pressed && styles.logRowPressed,
+            ]}
           >
             <View style={styles.logRowHead}>
-              <Text style={styles.logIndex}>#{item.index}</Text>
-              {item.marked && <Text style={styles.logMarked}>MARK</Text>}
+              <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
+              {item.marked && <PushPinIcon size={14} color={colors.yuzuZest} weight="fill" />}
             </View>
             <Text style={styles.logText} numberOfLines={3}>{item.text}</Text>
           </Pressable>
@@ -301,33 +333,66 @@ export default function RecordScreen({ session }: { session: Session }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: OFFWHITE },
-  list: { padding: 24, gap: 12 },
-  header: { alignItems: "center", gap: 24, paddingBottom: 16 },
-  title: { fontSize: 32, fontWeight: "900", color: INK, letterSpacing: 1 },
-  sub: { fontSize: 12, color: INK, opacity: 0.5, letterSpacing: 1 },
-  statsRow: { flexDirection: "row", gap: 16 },
-  statsText: { fontSize: 12, fontWeight: "700", color: INK, opacity: 0.6, letterSpacing: 1 },
+  safe: { flex: 1, backgroundColor: colors.yuzuWhite },
+  list: { padding: spacing.xl, gap: spacing.md },
+  header: { alignItems: "center", gap: spacing.xl, paddingBottom: spacing.lg },
+  title: { fontFamily: fonts.displayBlack, fontSize: fontSize.xxl, color: colors.ink },
+  sub: { fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: fontSize.xs * letterSpacing.wide },
+  statsRow: { flexDirection: "row", gap: spacing.xl },
+  statCard: { alignItems: "center", gap: spacing.xs },
+  statLabel: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+    textTransform: "uppercase",
+  },
+  statValue: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: colors.ink, lineHeight: fontSize.xxl },
   fab: {
-    width: 140,
-    height: 140,
-    borderRadius: 9999,
-    backgroundColor: INK,
+    width: 96,
+    height: 96,
+    borderRadius: radius.pill,
+    backgroundColor: colors.yuzuYellow,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.6)",
+    ...recordingGlowShadow,
   },
-  fabRecording: { backgroundColor: ZEST },
+  fabRecording: { backgroundColor: colors.yuzuZest },
   fabDisabled: { opacity: 0.3 },
-  fabPressed: { opacity: 0.85 },
-  fabLabel: { color: OFFWHITE, fontSize: 18, fontWeight: "700" },
-  pill: { fontSize: 14, fontWeight: "700", color: INK, letterSpacing: 2 },
-  result: { fontSize: 16, color: INK, textAlign: "center", paddingHorizontal: 16 },
-  signOut: { fontSize: 13, color: INK, opacity: 0.5, marginTop: 16 },
-  logHeader: { fontSize: 14, fontWeight: "700", color: INK, letterSpacing: 2, alignSelf: "flex-start" },
-  logRow: { borderTopWidth: 1, borderTopColor: "#1A1A2E22", paddingVertical: 12, gap: 4 },
-  logRowPressed: { opacity: 0.6 },
-  logRowHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logIndex: { fontSize: 12, fontWeight: "700", color: INK, opacity: 0.5 },
-  logMarked: { fontSize: 11, fontWeight: "700", color: ZEST, letterSpacing: 1 },
-  logText: { fontSize: 15, color: INK },
+  fabPressed: { transform: [{ scale: 0.94 }] },
+  pill: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.ink,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+    textTransform: "uppercase",
+  },
+  hint: { fontSize: fontSize.base, color: colors.inkSecondary },
+  result: { fontSize: fontSize.base, color: colors.ink, textAlign: "left", paddingHorizontal: spacing.md, lineHeight: fontSize.base * 1.6 },
+  signOut: { fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.md },
+  logHeader: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+    letterSpacing: fontSize.lg * letterSpacing.wider,
+    textTransform: "uppercase",
+    alignSelf: "flex-start",
+    paddingTop: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    width: "100%",
+  },
+  logRow: { borderTopWidth: 1, borderTopColor: colors.divider, paddingVertical: spacing.md, gap: spacing.xs },
+  logRowMarked: { borderTopColor: colors.yuzuZest },
+  logRowPressed: { backgroundColor: colors.surfaceHover },
+  logRowHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  logIndex: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.wide,
+  },
+  logText: { fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
 });

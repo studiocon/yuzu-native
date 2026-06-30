@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
-import { INK, OFFWHITE } from "../lib/theme";
+import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 
 type Step = "email" | "code";
 
@@ -54,7 +54,10 @@ export default function AuthScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.body}>
-        <Text style={styles.title}>YUZU</Text>
+        <View style={styles.brand}>
+          <Text style={styles.logo}>YUZU</Text>
+          <Text style={styles.tagline}>BE TRUE</Text>
+        </View>
 
         {step === "email" ? (
           <>
@@ -63,7 +66,7 @@ export default function AuthScreen() {
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
-              placeholderTextColor="#1A1A2E66"
+              placeholderTextColor={colors.inkMuted}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -77,7 +80,7 @@ export default function AuthScreen() {
               onPress={handleSend}
               disabled={loading || !email.trim()}
             >
-              <Text style={styles.buttonLabel}>{loading ? "送信中..." : "送れ"}</Text>
+              <Text style={styles.buttonLabel}>{loading ? "送信中…" : "送れ"}</Text>
             </Pressable>
           </>
         ) : (
@@ -87,7 +90,7 @@ export default function AuthScreen() {
             <TextInput
               style={styles.input}
               placeholder="12345678"
-              placeholderTextColor="#1A1A2E66"
+              placeholderTextColor={colors.inkMuted}
               keyboardType="number-pad"
               maxLength={10}
               value={code}
@@ -100,7 +103,7 @@ export default function AuthScreen() {
               onPress={handleVerify}
               disabled={loading || code.trim().length < 4}
             >
-              <Text style={styles.buttonLabel}>{loading ? "確認中..." : "確認"}</Text>
+              <Text style={styles.buttonLabel}>{loading ? "確認中…" : "確認"}</Text>
             </Pressable>
             <Pressable onPress={() => { setStep("email"); setCode(""); setError(""); }} disabled={loading}>
               <Text style={styles.back}>戻る</Text>
@@ -113,32 +116,56 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: OFFWHITE },
-  body: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
-  title: { fontSize: 28, fontWeight: "900", color: INK, letterSpacing: 1 },
-  h2: { fontSize: 20, fontWeight: "800", color: INK, marginTop: 8 },
-  sub: { fontSize: 14, color: INK, opacity: 0.7, textAlign: "center" },
+  safe: { flex: 1, backgroundColor: colors.yuzuWhite },
+  body: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.lg },
+  brand: { alignItems: "center", gap: spacing.xs, marginBottom: spacing.md },
+  logo: {
+    fontFamily: fonts.displayBlack,
+    fontSize: fontSize.xxl,
+    color: colors.ink,
+  },
+  tagline: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+    textTransform: "uppercase",
+  },
+  h2: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.lg,
+    color: colors.ink,
+    letterSpacing: fontSize.lg * letterSpacing.wider,
+    textTransform: "uppercase",
+    marginTop: spacing.sm,
+  },
+  sub: { fontSize: fontSize.base, color: colors.inkSecondary, textAlign: "center", lineHeight: fontSize.base * 1.6 },
   input: {
     width: "100%",
     borderWidth: 1,
-    borderColor: INK,
-    borderRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: INK,
+    borderColor: colors.ink,
+    borderRadius: radius.button,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md - 2,
+    fontSize: fontSize.lg,
+    color: colors.ink,
     textAlign: "center",
   },
-  error: { color: "#C0392B", fontSize: 13 },
+  error: { color: colors.danger, fontSize: fontSize.sm },
   button: {
-    backgroundColor: INK,
-    borderRadius: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    backgroundColor: colors.ink,
+    borderRadius: radius.button,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
     width: "100%",
     alignItems: "center",
   },
-  buttonPressed: { opacity: 0.85 },
-  buttonLabel: { color: OFFWHITE, fontWeight: "700", fontSize: 15 },
-  back: { fontSize: 13, color: INK, opacity: 0.5, marginTop: 4 },
+  buttonPressed: { transform: [{ scale: 0.97 }] },
+  buttonLabel: {
+    color: colors.yuzuWhite,
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.sm,
+    letterSpacing: fontSize.sm * letterSpacing.wider,
+  },
+  back: { fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.xs },
 });
