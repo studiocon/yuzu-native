@@ -120,8 +120,10 @@ export default function RecordScreen({ session }: { session: Session }) {
     }
   }
 
+  const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
+
   async function handlePressIn() {
-    if (phase === "carving") return;
+    if (phase === "carving" || limitReached) return;
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setPhase("error");
@@ -239,16 +241,18 @@ export default function RecordScreen({ session }: { session: Session }) {
             <Pressable
               onPressIn={handlePressIn}
               onPressOut={handlePressOut}
+              disabled={limitReached}
               style={({ pressed }) => [
                 styles.fab,
                 phase === "recording" && styles.fabRecording,
+                limitReached && styles.fabDisabled,
                 pressed && styles.fabPressed,
               ]}
             >
               <Text style={styles.fabLabel}>{phase === "recording" ? "" : "話せ"}</Text>
             </Pressable>
 
-            <Text style={styles.pill}>{phase.toUpperCase()}</Text>
+            <Text style={styles.pill}>{limitReached ? "今日はここまで" : phase.toUpperCase()}</Text>
 
             {text !== "" && <Text style={styles.result}>{text}</Text>}
 
@@ -296,6 +300,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   fabRecording: { backgroundColor: ZEST },
+  fabDisabled: { opacity: 0.3 },
   fabPressed: { opacity: 0.85 },
   fabLabel: { color: OFFWHITE, fontSize: 18, fontWeight: "700" },
   pill: { fontSize: 14, fontWeight: "700", color: INK, letterSpacing: 2 },
