@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CopyIcon, PushPinIcon, PushPinSlashIcon, XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
@@ -92,8 +93,15 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <StatusBar hidden />
       <SafeAreaView style={styles.safe}>
-        <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="閉じる" accessibilityRole="button">
+        <Pressable
+          onPress={onClose}
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+          hitSlop={12}
+          accessibilityLabel="閉じる"
+          accessibilityRole="button"
+        >
           <XIcon size={22} color={colors.yuzuWhite} weight="bold" />
         </Pressable>
 
@@ -188,15 +196,18 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ink },
   closeBtn: {
     position: "absolute",
-    top: spacing.md,
-    right: spacing.sm,
-    width: 44,
-    height: 44,
+    top: spacing.lg,
+    right: spacing.lg,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
     zIndex: 1,
   },
-  body: { padding: spacing.xl, paddingTop: spacing.xxl + spacing.md, gap: spacing.xl },
+  closeBtnPressed: { backgroundColor: "rgba(255,255,255,0.26)" },
+  body: { padding: spacing.xl, paddingTop: spacing.xxl + spacing.xxl, gap: spacing.xl },
   band: { position: "relative", paddingLeft: spacing.md, gap: spacing.md },
   bandEdge: { position: "absolute", left: 0, top: 4, bottom: 4, width: 3, borderRadius: 2 },
   num: {

@@ -1,16 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  AppState,
-  Easing,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import {
@@ -19,28 +8,22 @@ import {
   setAudioModeAsync,
   useAudioRecorder,
 } from "expo-audio";
-import { MicrophoneIcon } from "phosphor-react-native";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabase";
-import {
-  colors,
-  fontSize,
-  fonts,
-  letterSpacing,
-  radius,
-  recordingGlowShadow,
-  spacing,
-} from "../lib/theme";
-import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
-import { formatDuration } from "../lib/stats";
-import { sentimentColor } from "../lib/sentimentColor";
+import { colors, spacing } from "../lib/theme";
 import { useSentimentScores } from "../lib/useSentimentScores";
+import { pickPrompt } from "../lib/prompts";
+import { computeStreak } from "../lib/streak";
 import type { Post } from "../lib/types";
+import AppHeader from "./AppHeader";
+import TabBar, { type MainTab } from "./TabBar";
+import RecordFab from "./RecordFab";
+import LogScreen, { type LogRowItem } from "./LogScreen";
+import InsightScreen from "./InsightScreen";
+import SettingsScreen from "./SettingsScreen";
 import IndexDetailModal from "./IndexDetailModal";
+import RecordModal, { type ModalPhase } from "./RecordModal";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
-
-type Phase = "idle" | "recording" | "carving" | "carved" | "error";
 
 type Stats = {
   streak: number;
@@ -50,20 +33,8 @@ type Stats = {
   totalMinutes: number;
 };
 
-type CarvedPost = {
-  index: number;
-  text: string;
-};
+type CarvedPost = { index: number; text: string };
 
-// 状態 pill は RECORDING → CARVING → CARVED の英語のみ（句点なし）。idle/error は日本語の地の文で表す。
-const PHASE_LABEL: Partial<Record<Phase, string>> = {
-  recording: "RECORDING",
-  carving: "CARVING",
-  carved: "CARVED",
-};
-
-// 部分的な更新パッチを既存 Stats にマージする（finishRecording 内の2箇所で同じ
-// 「サーバ値があればそれを、無ければ前の値を使う」パターンが重複していたのを共通化）。
 function mergeStats(prev: Stats | null, patch: Partial<Stats>): Stats {
   return {
     streak: patch.streak ?? prev?.streak ?? 0,
@@ -74,57 +45,15 @@ function mergeStats(prev: Stats | null, patch: Partial<Stats>): Stats {
   };
 }
 
-// LOG カード本文下の擬似「声紋」。録音長に比例した本数、id 由来の決定的な高さ。
-const Voiceprint = memo(function Voiceprint({ id, durationMs }: { id: string; durationMs: number }) {
-  const bars = useMemo(() => {
-    const barCount = voiceprintBarCount(durationMs);
-    return barCount === null ? null : seededHeights(id, barCount);
-  }, [id, durationMs]);
-  if (!bars) return null;
-  return (
-    <View style={styles.voiceprint}>
-      {bars.map((h, i) => (
-        <View key={i} style={[styles.voiceprintBar, { height: Math.max(1, Math.round(h * 20)) }]} />
-      ))}
-    </View>
-  );
-});
-
-// LOG 一覧の1行。声紋・感情カラーの再計算を親の再レンダーから切り離すため memo 化。
-const LogRow = memo(function LogRow({
-  post,
-  edgeColor,
-  onPress,
-}: {
-  post: Post;
-  edgeColor: string | null;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`#${post.index} を開く`}
-      style={({ pressed }) => [
-        styles.logRow,
-        post.marked && styles.logRowMarked,
-        pressed && styles.logRowPressed,
-      ]}
-    >
-      {edgeColor && <View style={[styles.logEdge, { backgroundColor: edgeColor }]} />}
-      <View style={styles.logRowHead}>
-        <Text style={styles.logIndex}>#{String(post.index).padStart(3, "0")}</Text>
-        {post.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(post.durationMs)}</Text>}
-      </View>
-      <Text style={styles.logText} numberOfLines={5}>{post.text}</Text>
-      <Voiceprint id={post.id} durationMs={post.durationMs} />
-    </Pressable>
-  );
-});
-
 export default function RecordScreen({ session }: { session: Session }) {
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [text, setText] = useState("");
+  const [tab, setTab] = useState<MainTab>("log");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [phase, setPhase] = useState<ModalPhase>("idle");
+  const [statusText, setStatusText] = useState("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [level, setLevel] = useState(0);
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
   const [carvedPost, setCarvedPost] = useState<CarvedPost | null>(null);
   const [logs, setLogs] = useState<Post[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
@@ -132,18 +61,19 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [firstPostAt, setFirstPostAt] = useState<number | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [prompt, setPrompt] = useState(() => pickPrompt());
+
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
   const startedAtRef = useRef(0);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
   const mountedRef = useRef(true);
-  const listRef = useRef<FlatList<Post>>(null);
+  const meterTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const listRef = useRef<FlatList<LogRowItem>>(null);
   const insets = useSafeAreaInsets();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
-  const carvedAnim = useRef(new Animated.Value(0)).current;
 
   const scores = useSentimentScores(logs, API_BASE, session.access_token);
 
@@ -151,6 +81,8 @@ export default function RecordScreen({ session }: { session: Session }) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (meterTimerRef.current) clearInterval(meterTimerRef.current);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     };
   }, []);
 
@@ -174,9 +106,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           charCount: p.char_count ?? 0,
         })),
       );
-      if (typeof data?.firstPostAt === "number") {
-        setFirstPostAt(data.firstPostAt);
-      }
+      if (typeof data?.firstPostAt === "number") setFirstPostAt(data.firstPostAt);
       if (typeof data?.streak === "number") {
         setStats({
           streak: data.streak,
@@ -197,80 +127,45 @@ export default function RecordScreen({ session }: { session: Session }) {
     fetchLogs();
   }, [fetchLogs]);
 
-  // 録音中: mic-recording-pulse（scale 1 → 1.04 をループ）
-  useEffect(() => {
-    if (phase !== "recording") {
-      pulseAnim.setValue(1);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.04,
-          duration: 700,
-          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 700,
-          easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [phase, pulseAnim]);
-
-  // 変換中（CARVING）: spinner-rotate（360度を 0.9s でループ）
-  useEffect(() => {
-    if (phase !== "carving") {
-      spinAnim.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 900,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [phase, spinAnim]);
-
-  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-
-  // CARVED カード: card-slide-up 相当（opacity 0→1 / translateY 20→0）
-  useEffect(() => {
-    if (!carvedPost) {
-      carvedAnim.setValue(0);
-      return;
-    }
-    Animated.timing(carvedAnim, {
-      toValue: 1,
-      duration: 400,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  }, [carvedPost, carvedAnim]);
-
-  const carvedOpacity = carvedAnim;
-  const carvedTranslateY = carvedAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
-
   // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する
+  // （AppState は expo-audio 側でも扱うが、UI 状態のリセットのため保険で監視）
   useEffect(() => {
-    const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active" || !armedRef.current) return;
-      armedRef.current = false;
-      recorderRef.current.stop().catch(() => {});
-      setPhase("error");
-      setText("中断された、もう一度");
-    });
-    return () => sub.remove();
+    return () => {
+      if (meterTimerRef.current) clearInterval(meterTimerRef.current);
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    };
   }, []);
+
+  function startTimers() {
+    stopTimers();
+    setLevel(0);
+    setRecordingElapsed(0);
+    meterTimerRef.current = setInterval(() => {
+      try {
+        const status = recorderRef.current.getStatus();
+        const db = typeof status.metering === "number" ? status.metering : -60;
+        // dB(-60..0) を 0..1 に正規化。弱声も反応するよう底上げ。
+        const norm = Math.max(0, Math.min(1, (db + 60) / 55));
+        setLevel(norm);
+      } catch {
+        setLevel(0);
+      }
+    }, 90);
+    elapsedTimerRef.current = setInterval(() => {
+      setRecordingElapsed(Date.now() - startedAtRef.current);
+    }, 200);
+  }
+
+  function stopTimers() {
+    if (meterTimerRef.current) {
+      clearInterval(meterTimerRef.current);
+      meterTimerRef.current = null;
+    }
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
+    }
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -278,7 +173,6 @@ export default function RecordScreen({ session }: { session: Session }) {
     setRefreshing(false);
   }
 
-  // MARK の確定状態は IndexDetailModal 側（PushPin トグル）で決める。ここはサーバ反映と一覧の同期だけ担う。
   async function applyMark(id: string, marked: boolean) {
     setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked } : l)));
     setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked } : prev));
@@ -286,10 +180,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     try {
       const res = await fetch(`${API_BASE}/api/records/${id}/mark`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ marked }),
       });
       if (!res.ok) throw new Error("mark failed");
@@ -302,16 +193,39 @@ export default function RecordScreen({ session }: { session: Session }) {
 
   const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
 
+  function openRecord() {
+    if (limitReached) {
+      setRecordOpen(true);
+      return;
+    }
+    setPrompt(pickPrompt());
+    setPhase("idle");
+    setStatusText("");
+    setPermissionDenied(false);
+    setCarvedPost(null);
+    setRecordOpen(true);
+  }
+
+  function closeRecord() {
+    setRecordOpen(false);
+    stopTimers();
+    armedRef.current = false;
+    pendingReleaseRef.current = false;
+    setPhase("idle");
+    setStatusText("");
+    setCarvedPost(null);
+    setLevel(0);
+  }
+
   async function handlePressIn() {
     if (phase === "carving" || limitReached) return;
     pendingReleaseRef.current = false;
-    // 録音FABは画面下部に固定表示（LOGが伸びてスクロールしていても常に押せる）だが、
-    // 状態pill・CARVEDカードはヘッダー側にあるので、録音開始時にトップへ戻して見えるようにする。
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setStatusText("");
+    setPermissionDenied(false);
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setPhase("error");
-      setText("マイク許可、出せ");
+      setPermissionDenied(true);
       return;
     }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -320,13 +234,10 @@ export default function RecordScreen({ session }: { session: Session }) {
     armedRef.current = true;
     startedAtRef.current = Date.now();
     setPhase("recording");
-    setText("");
     setCarvedPost(null);
+    startTimers();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // 録音開始の準備中（権限確認〜prepareToRecordAsync）に指が離れている、
-    // つまり armedRef が立つ前に handlePressOut が来ていた場合はここで即座に止める。
-    // でないと pressOut イベントは二度と来ず、録音が止められなくなる。
     if (pendingReleaseRef.current) {
       await finishRecording();
     }
@@ -343,6 +254,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   async function finishRecording() {
     armedRef.current = false;
     pendingReleaseRef.current = false;
+    stopTimers();
+    setLevel(0);
     await recorder.stop();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -350,7 +263,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     const durationMs = Date.now() - startedAtRef.current;
     if (!uri) {
       setPhase("error");
-      setText("録音、失敗した");
+      setStatusText("録音、失敗した");
       return;
     }
 
@@ -368,22 +281,19 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (!mountedRef.current) return;
       if (!sttRes.ok) {
         setPhase("error");
-        setText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
+        setStatusText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
         return;
       }
       const transcript: string = sttData.text || "";
       if (!transcript) {
         setPhase("error");
-        setText("無音、話せ");
+        setStatusText("無音、話せ");
         return;
       }
 
       const saveRes = await fetch(`${API_BASE}/api/records`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ text: transcript, durationMs }),
       });
       const saveData = await saveRes.json();
@@ -392,14 +302,14 @@ export default function RecordScreen({ session }: { session: Session }) {
         setPhase("error");
         const errCode = saveData?.error;
         if (errCode === "daily_limit") {
-          setText(`今日はここまで（${saveRes.status}）`);
+          setStatusText("今日はここまで");
           if (typeof saveData?.todayCount === "number") {
             setStats((prev) => mergeStats(prev, { todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
-          setText("ログインし直せ");
+          setStatusText("ログインし直せ");
         } else {
-          setText(`保存失敗（${saveRes.status}）`);
+          setStatusText(`保存失敗（${saveRes.status}）`);
         }
         return;
       }
@@ -407,142 +317,67 @@ export default function RecordScreen({ session }: { session: Session }) {
       setPhase("carved");
       setCarvedPost({ index: saveData.post.index, text: transcript });
       if (typeof saveData?.streak === "number") {
-        setStats((prev) =>
-          mergeStats(prev, {
-            streak: saveData.streak,
-            todayCount: saveData.todayCount,
-            maxDaily: saveData.maxDaily,
-          }),
-        );
+        setStats((prev) => mergeStats(prev, { streak: saveData.streak, todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
       }
       fetchLogs();
     } catch {
       if (!mountedRef.current) return;
       setPhase("error");
-      setText("送れなかった。もう一度。");
+      setStatusText("送れなかった。もう一度。");
     }
   }
 
-  const phaseLabel = limitReached ? undefined : PHASE_LABEL[phase];
-  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : 0;
+  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : 3;
+  const chromeHidden = !!selectedPost || settingsOpen || recordOpen;
 
-  const renderItem = useCallback(
-    ({ item }: { item: Post }) => (
-      <LogRow post={item} edgeColor={sentimentColor(scores[item.id])} onPress={() => setSelectedPost(item)} />
-    ),
-    [scores],
-  );
+  // CompleteView 用の 7 日帯 + STREAK（サーバ値と client 計算の大きい方）。
+  const { streak: clientStreak, week } = useMemo(() => computeStreak(logs), [logs]);
+  const streak = Math.max(stats?.streak ?? 0, clientStreak);
+  const totalMinutes = stats?.totalMinutes ?? 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <FlatList
-        ref={listRef}
-        contentContainerStyle={[styles.list, { paddingBottom: 96 + insets.bottom + spacing.xl * 2 }]}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.title}>YUZU</Text>
-            <Text style={styles.sub}>{session.user.email}</Text>
+      <AppHeader title={tab === "insight" ? "INSIGHT" : "LOG"} onOpenSettings={() => setSettingsOpen(true)} />
 
-            {stats && (
-              <View style={styles.statsRow}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>RECORDS</Text>
-                  <Text style={styles.statValue}>{stats.totalCount}</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>MINUTES</Text>
-                  <Text style={styles.statValue}>{stats.totalMinutes}</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>STREAK</Text>
-                  <Text style={styles.statValue}>{stats.streak}</Text>
-                </View>
-              </View>
-            )}
+      {tab === "log" ? (
+        <LogScreen
+          logs={logs}
+          logsLoaded={logsLoaded}
+          stats={stats}
+          scores={scores}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          onOpenDetail={setSelectedPost}
+          listRef={listRef}
+          listFooterPadding={96 + insets.bottom + spacing.xl * 2}
+        />
+      ) : (
+        <InsightScreen posts={logs} scores={scores} accessToken={session.access_token} />
+      )}
 
-            {phaseLabel ? (
-              <Text style={styles.pill}>{phaseLabel}</Text>
-            ) : (
-              <Text style={styles.hint}>{limitReached ? "今日はここまで" : "長押し。話せ"}</Text>
-            )}
+      <View pointerEvents="box-none" style={[styles.chromeRow, { bottom: insets.bottom + spacing.md, left: insets.left + spacing.lg, right: insets.right + spacing.lg }]}>
+        <TabBar tab={tab} onChange={setTab} hidden={chromeHidden} />
+        <RecordFab disabled={limitReached && !recordOpen} hidden={chromeHidden} onPress={openRecord} />
+      </View>
 
-            {/* 残り回数は 3 回未満のときだけ出す（copy ルール） */}
-            {!limitReached && stats && remaining > 0 && remaining < 3 && (
-              <Text style={styles.leftHint}>{remaining} LEFT</Text>
-            )}
-
-            {phase === "carved" && carvedPost && (
-              <Animated.View
-                style={[
-                  styles.carvedCard,
-                  { opacity: carvedOpacity, transform: [{ translateY: carvedTranslateY }] },
-                ]}
-              >
-                <Text style={styles.carvedIndex}>#{String(carvedPost.index).padStart(3, "0")}</Text>
-                <Text style={styles.carvedText}>{carvedPost.text}</Text>
-              </Animated.View>
-            )}
-
-            {text !== "" && (
-              <Text style={styles.result} accessibilityLiveRegion="polite">{text}</Text>
-            )}
-
-            <Pressable
-              onPress={() => supabase.auth.signOut()}
-              accessibilityRole="button"
-              accessibilityLabel="サインアウト"
-            >
-              <Text style={styles.signOut}>サインアウト</Text>
-            </Pressable>
-
-            {logsLoaded ? (
-              <>
-                {logs.length > 0 && <Text style={styles.logHeader}>LOG</Text>}
-                {logs.length === 0 && <Text style={styles.empty}>話せ</Text>}
-              </>
-            ) : (
-              <ActivityIndicator color={colors.inkMuted} style={styles.loadingIndicator} />
-            )}
-          </View>
-        }
-        data={logs}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.inkMuted}
-            colors={[colors.yuzuZest]}
-          />
-        }
-        renderItem={renderItem}
+      <RecordModal
+        visible={recordOpen}
+        phase={phase}
+        statusText={statusText}
+        permissionDenied={permissionDenied}
+        level={level}
+        recordingElapsed={recordingElapsed}
+        prompt={prompt}
+        remaining={remaining}
+        limitReached={limitReached}
+        carvedPost={carvedPost}
+        week={week}
+        totalMinutes={totalMinutes}
+        streak={streak}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onClose={closeRecord}
       />
-
-      {/* 録音FABはyuzu-appの .fab-record と同じく画面下部に固定。LOGが伸びてスクロールしていても常に押せる。 */}
-      <Animated.View
-        pointerEvents="box-none"
-        style={[styles.fabWrap, { bottom: insets.bottom + spacing.xl, transform: [{ scale: pulseAnim }] }]}
-      >
-        <Pressable
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          disabled={limitReached || phase === "carving"}
-          accessibilityRole="button"
-          accessibilityLabel={phase === "recording" ? "録音を停止" : "長押しで録音開始"}
-          style={({ pressed }) => [
-            styles.fab,
-            phase === "recording" && styles.fabRecording,
-            limitReached && styles.fabDisabled,
-            pressed && styles.fabPressed,
-          ]}
-        >
-          {phase === "carving" ? (
-            <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
-          ) : (
-            <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
-          )}
-        </Pressable>
-      </Animated.View>
 
       <IndexDetailModal
         post={selectedPost}
@@ -551,126 +386,18 @@ export default function RecordScreen({ session }: { session: Session }) {
         onClose={() => setSelectedPost(null)}
         onToggleMark={applyMark}
       />
+
+      <SettingsScreen visible={settingsOpen} session={session} onClose={() => setSettingsOpen(false)} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.yuzuWhite },
-  list: { padding: spacing.xl, gap: spacing.md },
-  header: { alignItems: "center", gap: spacing.xl, paddingBottom: spacing.lg },
-  title: { fontFamily: fonts.displayBlack, fontSize: fontSize.xxl, color: colors.ink },
-  sub: { fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: fontSize.xs * letterSpacing.wide },
-  statsRow: { flexDirection: "row", gap: spacing.lg },
-  statCard: { alignItems: "center", gap: spacing.xs, minWidth: 64 },
-  leftHint: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xs,
-    color: colors.inkMuted,
-    letterSpacing: fontSize.xs * letterSpacing.widest,
-  },
-  carvedCard: {
-    width: "100%",
-    backgroundColor: colors.ink,
-    borderRadius: radius.card,
-    padding: 22,
-    gap: spacing.sm,
-  },
-  carvedIndex: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xl,
-    color: colors.yuzuWhite,
-  },
-  carvedText: {
-    fontSize: fontSize.base,
-    color: "rgba(255,255,255,0.92)",
-    lineHeight: fontSize.base * 1.75,
-  },
-  statLabel: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xs,
-    color: colors.inkMuted,
-    letterSpacing: fontSize.xs * letterSpacing.widest,
-    textTransform: "uppercase",
-  },
-  statValue: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: colors.ink, lineHeight: fontSize.xxl },
-  fabWrap: {
+  chromeRow: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  fab: {
-    width: 96,
-    height: 96,
-    borderRadius: radius.pill,
-    backgroundColor: colors.yuzuYellow,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.6)",
-    ...recordingGlowShadow,
-  },
-  fabRecording: { backgroundColor: colors.yuzuZest },
-  fabDisabled: { opacity: 0.3 },
-  fabPressed: { transform: [{ scale: 0.94 }] },
-  spinner: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 3,
-    borderColor: "rgba(26,26,46,0.25)",
-    borderTopColor: colors.ink,
-  },
-  pill: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xs,
-    color: colors.ink,
-    letterSpacing: fontSize.xs * letterSpacing.widest,
-    textTransform: "uppercase",
-  },
-  hint: { fontSize: fontSize.base, color: colors.inkSecondary },
-  result: { fontSize: fontSize.base, color: colors.ink, textAlign: "left", paddingHorizontal: spacing.md, lineHeight: fontSize.base * 1.6 },
-  signOut: { fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.md },
-  logHeader: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.lg,
-    color: colors.ink,
-    letterSpacing: fontSize.lg * letterSpacing.wider,
-    textTransform: "uppercase",
-    alignSelf: "flex-start",
-    paddingTop: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    width: "100%",
-  },
-  logRow: {
-    position: "relative",
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.sm,
-    gap: spacing.xs,
-  },
-  logRowMarked: { borderTopColor: colors.yuzuZest },
-  logEdge: { position: "absolute", left: 0, top: spacing.md, bottom: spacing.md, width: 3, borderRadius: 2 },
-  logRowPressed: { backgroundColor: colors.surfaceHover },
-  logRowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  logIndex: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xs,
-    color: colors.inkMuted,
-    letterSpacing: fontSize.xs * letterSpacing.wide,
-  },
-  logDuration: {
-    fontFamily: fonts.displayRegular,
-    fontSize: fontSize.xs,
-    color: colors.inkMuted,
-    letterSpacing: fontSize.xs * letterSpacing.wide,
-  },
-  logText: { fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
-  voiceprint: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 20, marginTop: 2, opacity: 0.45 },
-  voiceprintBar: { flex: 1, minWidth: 1, backgroundColor: colors.inkMuted },
-  empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.xl },
-  loadingIndicator: { paddingTop: spacing.xl },
 });

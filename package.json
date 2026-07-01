@@ -7,6 +7,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.108.2",
     "aes-js": "^3.1.2",
+    "d3-hierarchy": "^3.1.2",
     "expo": "^54.0.0",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/aes-js": "^3.1.4",
+    "@types/d3-hierarchy": "^3.1.7",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.10",
     "eslint": "^9.39.4",
