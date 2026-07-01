@@ -385,6 +385,8 @@ export default function RecordScreen({ session }: { session: Session }) {
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
                 disabled={limitReached || phase === "carving"}
+                accessibilityRole="button"
+                accessibilityLabel={phase === "recording" ? "録音を停止" : "長押しで録音開始"}
                 style={({ pressed }) => [
                   styles.fab,
                   phase === "recording" && styles.fabRecording,
@@ -418,9 +420,15 @@ export default function RecordScreen({ session }: { session: Session }) {
               </View>
             )}
 
-            {text !== "" && <Text style={styles.result}>{text}</Text>}
+            {text !== "" && (
+              <Text style={styles.result} accessibilityLiveRegion="polite">{text}</Text>
+            )}
 
-            <Pressable onPress={() => supabase.auth.signOut()}>
+            <Pressable
+              onPress={() => supabase.auth.signOut()}
+              accessibilityRole="button"
+              accessibilityLabel="サインアウト"
+            >
               <Text style={styles.signOut}>サインアウト</Text>
             </Pressable>
 
@@ -441,6 +449,8 @@ export default function RecordScreen({ session }: { session: Session }) {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => setSelectedPost(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`#${item.index} を開く`}
             style={({ pressed }) => [
               styles.logRow,
               item.marked && styles.logRowMarked,
