@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
@@ -119,89 +119,114 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <Text style={styles.headerLabel}>REPORTS</Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="閉じる"
-            hitSlop={12}
-            style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
-          >
-            <XIcon size={22} color={colors.ink} weight="bold" />
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.body}>
-          {status === "loading" && (
-            <View style={styles.skeletonWrap}>
-              <Skeleton width="70%" height={32} radius={4} />
-              <Skeleton width="80%" height={14} />
-              <Skeleton height={200} radius={4} />
-              <Skeleton height={14} />
-              <Skeleton height={14} />
-              <Skeleton width="65%" height={14} />
-              <Skeleton height={14} />
-              <Skeleton height={14} />
-              <Text style={styles.statusSub}>AI が刻んでいる。画面を離れても、閉じても止まらない。</Text>
-            </View>
-          )}
-          {status === "no_posts" && <Text style={styles.status}>この期間は何も無い</Text>}
-          {status === "in_progress" && <Text style={styles.status}>まだ進行中の期間だ</Text>}
-          {status === "error" && (
-            <View style={styles.statusWrap}>
-              <Text style={styles.status}>失敗、話せ</Text>
-              <Pressable onPress={() => setRetryNonce((n) => n + 1)} style={styles.retryBtn}>
-                <Text style={styles.retryLabel}>RETRY</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {status === "ok" && payload && (
-            <View style={styles.article}>
-              <Text style={styles.title}>{periodLabel(periodKey)}</Text>
-              <Text style={styles.headline}>{payload.headline}</Text>
-
-              <Block title="EMOTION">
-                <EmotionChart data={payload.sentimentSeries} />
-              </Block>
-
-              {payload.topics.length > 0 && (
-                <Block title="TOPICS">
-                  <View style={styles.topics}>
-                    {payload.topics.map((t, i) => (
-                      <View key={i} style={styles.chip}>
-                        <Text style={styles.chipLabel}>{t}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </Block>
-              )}
-
-              <Block title="FACT">
-                <Paragraphs text={payload.fact} />
-              </Block>
-
-              {payload.proof.length > 0 && (
-                <Block title="PROOF">
-                  <Paragraphs text={payload.proof} />
-                </Block>
-              )}
-
-              <Block title="SHADOW">
-                <Paragraphs text={payload.shadow} />
-              </Block>
-
-              <Block title="ADVICE">
-                <Text style={styles.advice}>{payload.advice}</Text>
-                {payload.adviceDetail && <Paragraphs text={payload.adviceDetail} />}
-              </Block>
-            </View>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+      <ModalBody periodKey={periodKey} status={status} payload={payload} onClose={onClose} setRetryNonce={setRetryNonce} />
     </Modal>
+  );
+}
+
+function ModalBody({
+  periodKey,
+  status,
+  payload,
+  onClose,
+  setRetryNonce,
+}: {
+  periodKey: string;
+  status: Status;
+  payload: ReportPayload | null;
+  onClose: () => void;
+  setRetryNonce: React.Dispatch<React.SetStateAction<number>>;
+}) {
+  // RN の <Modal> は別ネイティブウィンドウに描画されるため、SafeAreaView 経由の
+  // 自動 top inset がマウント直後は正しく反映されないことがある（結果、ヘッダーが
+  // 一瞬〜終始高い位置に見える）。top は自前で useSafeAreaInsets() から計算し、
+  // 最低でも spacing.lg は確保するフロアを設けて「0 として計算されて詰まる」事故を防ぐ。
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Math.max(insets.top, spacing.lg);
+
+  return (
+    <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
+      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+        <Text style={styles.headerLabel}>REPORTS</Text>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="閉じる"
+          hitSlop={12}
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
+        >
+          <XIcon size={22} color={colors.ink} weight="bold" />
+        </Pressable>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.body}>
+        {status === "loading" && (
+          <View style={styles.skeletonWrap}>
+            <Skeleton width="70%" height={32} radius={4} />
+            <Skeleton width="80%" height={14} />
+            <Skeleton height={200} radius={4} />
+            <Skeleton height={14} />
+            <Skeleton height={14} />
+            <Skeleton width="65%" height={14} />
+            <Skeleton height={14} />
+            <Skeleton height={14} />
+            <Text style={styles.statusSub}>AI が刻んでいる。画面を離れても、閉じても止まらない。</Text>
+          </View>
+        )}
+        {status === "no_posts" && <Text style={styles.status}>この期間は何も無い</Text>}
+        {status === "in_progress" && <Text style={styles.status}>まだ進行中の期間だ</Text>}
+        {status === "error" && (
+          <View style={styles.statusWrap}>
+            <Text style={styles.status}>失敗、話せ</Text>
+            <Pressable onPress={() => setRetryNonce((n) => n + 1)} style={styles.retryBtn}>
+              <Text style={styles.retryLabel}>RETRY</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {status === "ok" && payload && (
+          <View style={styles.article}>
+            <Text style={styles.title}>{periodLabel(periodKey)}</Text>
+            <Text style={styles.headline}>{payload.headline}</Text>
+
+            <Block title="EMOTION">
+              <EmotionChart data={payload.sentimentSeries} />
+            </Block>
+
+            {payload.topics.length > 0 && (
+              <Block title="TOPICS">
+                <View style={styles.topics}>
+                  {payload.topics.map((t, i) => (
+                    <View key={i} style={styles.chip}>
+                      <Text style={styles.chipLabel}>{t}</Text>
+                    </View>
+                  ))}
+                </View>
+              </Block>
+            )}
+
+            <Block title="FACT">
+              <Paragraphs text={payload.fact} />
+            </Block>
+
+            {payload.proof.length > 0 && (
+              <Block title="PROOF">
+                <Paragraphs text={payload.proof} />
+              </Block>
+            )}
+
+            <Block title="SHADOW">
+              <Paragraphs text={payload.shadow} />
+            </Block>
+
+            <Block title="ADVICE">
+              <Text style={styles.advice}>{payload.advice}</Text>
+              {payload.adviceDetail && <Paragraphs text={payload.adviceDetail} />}
+            </Block>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
