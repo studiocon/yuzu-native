@@ -8,7 +8,8 @@
 
 - バックエンドは作らない。既存の [yuzu-app](https://github.com/studiocon/yuzu-app) の API（`https://app.yuzu.style/api/*`）をそのまま使う
 - 認証は **メールOTP（数字コード。桁数はメールテンプレート依存、入力欄は最大10桁まで許容）**。Supabase `signInWithOtp` → `verifyOtp`。Magic Link（タップ式）はカスタムスキーム `exp://` の redirect_to が Supabase 側で握り潰され Site URL にフォールバックする現象が実機で確認されたため不採用（ディープリンクに依存しない方式に統一）
-- `/api/transcribe`・`/api/records` は Bearer トークン認証に対応済み（yuzu-app [#100](https://github.com/studiocon/yuzu-app/issues/100)）
+- `/api/transcribe`・`/api/records`・`/api/analyze-sentiment` は Bearer トークン認証に対応済み（yuzu-app [#100](https://github.com/studiocon/yuzu-app/issues/100)・[#127](https://github.com/studiocon/yuzu-app/pull/127)）
+- 感情カラー（LOGカードの左端バー・INDEX詳細の声紋ヒーロー）は yuzu-app と同じく DB非永続化。未解析の投稿本文を `POST /api/analyze-sentiment` に渡してClaudeでスコア化し、結果を `AsyncStorage`（Web版の localStorage 相当）にキャッシュする（[lib/sentimentCache.ts](lib/sentimentCache.ts)・[lib/sentimentColor.ts](lib/sentimentColor.ts)）
 - セッションは `expo-secure-store` + `AsyncStorage` の LargeSecureStore パターンで永続化（[lib/supabase.ts](lib/supabase.ts)）
 - 録音保存後は `GET /api/records` で直近のログ一覧（LOG）・STATS（RECORDS/MINUTES/STREAK）・残り回数（LEFT）を取得して表示（[components/RecordScreen.tsx](components/RecordScreen.tsx)）。1日上限超過時のエラーコピーは yuzu-app の `app/page.tsx` と同じ文言に統一
 - LOG カードをタップすると yuzu-app の IndexDetailModal 相当の全文表示モーダル（[components/IndexDetailModal.tsx](components/IndexDetailModal.tsx)）が開く。MARK（ピン留め）と COPY（クリップボードコピー、Notion移行期間限定の一時機能）はここに集約し、一覧カード自体にはボタンを置かない（yuzu-app と同じ設計）

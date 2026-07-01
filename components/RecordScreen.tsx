@@ -32,7 +32,12 @@ import {
 } from "../lib/theme";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { formatDuration } from "../lib/stats";
+import { sentimentColor } from "../lib/sentimentColor";
+import { loadSentimentCache, saveSentimentCache } from "../lib/sentimentCache";
 import IndexDetailModal from "./IndexDetailModal";
+
+// yuzu-app の analyze-sentiment と同じ 30 日ウィンドウ（それより古い投稿はスコア化しない）。
+const SENTIMENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
@@ -92,6 +97,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [firstPostAt, setFirstPostAt] = useState<number | null>(null);
   const [selectedPost, setSelectedPost] = useState<LogEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [scoresHydrated, setScoresHydrated] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
@@ -143,6 +150,53 @@ export default function RecordScreen({ session }: { session: Session }) {
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  // 感情スコア: AsyncStorage から hydrate（yuzu-app の localStorage hydrate に相当）
+  useEffect(() => {
+    loadSentimentCache().then((cached) => {
+      setScores(cached);
+      setScoresHydrated(true);
+    });
+  }, []);
+
+  // 未解析の投稿だけ /api/analyze-sentiment に投げてスコアを埋める。
+  // スコアはDBに永続化されない装飾情報のため、失敗しても録音フローには影響させない。
+  useEffect(() => {
+    if (!scoresHydrated || logs.length === 0) return;
+    const cutoff = Date.now() - SENTIMENT_WINDOW_MS;
+    const unresolved = logs.filter((l) => l.createdAt >= cutoff && !(l.id in scores));
+    if (unresolved.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/analyze-sentiment`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            posts: unresolved.map((l) => ({ id: l.id, text: l.text, createdAt: l.createdAt })),
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { results: { postId: string; score: number }[] };
+        if (cancelled) return;
+        setScores((prev) => {
+          const next = { ...prev };
+          for (const r of data.results) next[r.postId] = r.score;
+          saveSentimentCache(next);
+          return next;
+        });
+      } catch {
+        // silent: 次回再試行（スコアはあくまで装飾、無くても致命ではない）
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scoresHydrated, logs, session.access_token]);
 
   // 録音中: mic-recording-pulse（scale 1 → 1.04 をループ）
   useEffect(() => {
@@ -469,30 +523,35 @@ export default function RecordScreen({ session }: { session: Session }) {
             colors={[colors.yuzuZest]}
           />
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setSelectedPost(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`#${item.index} を開く`}
-            style={({ pressed }) => [
-              styles.logRow,
-              item.marked && styles.logRowMarked,
-              pressed && styles.logRowPressed,
-            ]}
-          >
-            <View style={styles.logRowHead}>
-              <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
-              {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
-            </View>
-            <Text style={styles.logText} numberOfLines={5}>{item.text}</Text>
-            <Voiceprint id={item.id} durationMs={item.durationMs} />
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const edgeColor = sentimentColor(scores[item.id]);
+          return (
+            <Pressable
+              onPress={() => setSelectedPost(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`#${item.index} を開く`}
+              style={({ pressed }) => [
+                styles.logRow,
+                item.marked && styles.logRowMarked,
+                pressed && styles.logRowPressed,
+              ]}
+            >
+              {edgeColor && <View style={[styles.logEdge, { backgroundColor: edgeColor }]} />}
+              <View style={styles.logRowHead}>
+                <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
+                {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
+              </View>
+              <Text style={styles.logText} numberOfLines={5}>{item.text}</Text>
+              <Voiceprint id={item.id} durationMs={item.durationMs} />
+            </Pressable>
+          );
+        }}
       />
 
       <IndexDetailModal
         post={selectedPost}
         firstPostAt={firstPostAt}
+        score={selectedPost ? scores[selectedPost.id] : undefined}
         onClose={() => setSelectedPost(null)}
         onToggleMark={(updated) => applyMark(updated.id, updated.marked)}
       />
@@ -583,8 +642,16 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
     width: "100%",
   },
-  logRow: { borderTopWidth: 1, borderTopColor: colors.divider, paddingVertical: spacing.md, gap: spacing.xs },
+  logRow: {
+    position: "relative",
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.sm,
+    gap: spacing.xs,
+  },
   logRowMarked: { borderTopColor: colors.yuzuZest },
+  logEdge: { position: "absolute", left: 0, top: spacing.md, bottom: spacing.md, width: 3, borderRadius: 2 },
   logRowPressed: { backgroundColor: colors.surfaceHover },
   logRowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   logIndex: {

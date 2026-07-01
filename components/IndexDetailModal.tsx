@@ -6,6 +6,7 @@ import { CopyIcon, PushPinIcon, PushPinSlashIcon, XIcon } from "phosphor-react-n
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { dayNumberSince, formatDuration } from "../lib/stats";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
+import { sentimentColor } from "../lib/sentimentColor";
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -22,6 +23,8 @@ type DetailPost = {
 type Props = {
   post: DetailPost | null;
   firstPostAt: number | null;
+  /** 感情スコア（-1.0〜1.0）。未解析なら undefined → 見出し帯の左端バー・声紋ヒーローは無色。 */
+  score?: number;
   onClose: () => void;
   onToggleMark: (post: DetailPost) => void;
 };
@@ -50,7 +53,7 @@ function splitParagraphs(text: string): string[] {
   return parts.length > 0 ? parts : [text];
 }
 
-export default function IndexDetailModal({ post, firstPostAt, onClose, onToggleMark }: Props) {
+export default function IndexDetailModal({ post, firstPostAt, score, onClose, onToggleMark }: Props) {
   const [marked, setMarked] = useState(false);
   const [justMarked, setJustMarked] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -70,6 +73,7 @@ export default function IndexDetailModal({ post, firstPostAt, onClose, onToggleM
   const barCount = voiceprintBarCount(post.durationMs);
   const bars = barCount === null ? null : seededHeights(post.id, barCount);
   const paragraphs = splitParagraphs(post.text);
+  const moodColor = sentimentColor(score);
 
   function fireMark() {
     if (!post) return;
@@ -104,12 +108,19 @@ export default function IndexDetailModal({ post, firstPostAt, onClose, onToggleM
 
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.band}>
+            {moodColor && <View style={[styles.bandEdge, { backgroundColor: moodColor }]} />}
             <Text style={styles.num}>#{String(post.index).padStart(3, "0")}</Text>
 
             {bars && (
               <View style={styles.voiceprint}>
                 {bars.map((h, i) => (
-                  <View key={i} style={[styles.voiceprintBar, { height: Math.max(1, Math.round(h * 80)) }]} />
+                  <View
+                    key={i}
+                    style={[
+                      styles.voiceprintBar,
+                      { height: Math.max(1, Math.round(h * 80)), backgroundColor: moodColor ?? "rgba(255,255,255,0.4)" },
+                    ]}
+                  />
                 ))}
               </View>
             )}
@@ -195,7 +206,8 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   body: { padding: spacing.xl, paddingTop: spacing.xxl + spacing.md, gap: spacing.xl },
-  band: { gap: spacing.md },
+  band: { position: "relative", paddingLeft: spacing.md, gap: spacing.md },
+  bandEdge: { position: "absolute", left: 0, top: 4, bottom: 4, width: 3, borderRadius: 2 },
   num: {
     fontFamily: fonts.displayBlack,
     fontSize: 72,
