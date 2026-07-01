@@ -12,7 +12,7 @@ import type { ReportPayload } from "../lib/insightTypes";
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Status = "loading" | "ok" | "no_posts" | "in_progress" | "error";
-type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "error";
+type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed" | "error";
 
 type Props = {
   periodKey: string | null;
@@ -52,20 +52,23 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
         return "ok";
       }
       if (getRes.status === 404) return "not_generated";
+      // 502: 前回の生成が失敗したジョブが残っている。恒久的なエラーではなく単発の失敗
+      // かもしれないので、呼び出し側では not_generated と同様に POST で再挑戦させる。
+      if (getRes.status === 502) return "failed";
       return "error";
     }
 
     (async () => {
       try {
-        // 1) まず GET（すでに生成済み or 進行中のジョブがあるか確認）
+        // 1) まず GET（すでに生成済み or 進行中/失敗済みのジョブがあるか確認）
         const first = await tryFetchReport();
         if (cancelled) return;
         if (first === "ok") return setStatus("ok");
         if (first === "in_progress") return setStatus("in_progress");
         if (first === "error") return setStatus("error");
 
-        if (first === "not_generated") {
-          // 未生成 → POST で起動（202 を即返すだけなので待たない）
+        if (first === "not_generated" || first === "failed") {
+          // 未生成、または前回失敗 → POST で（再）起動（202 を即返すだけなので待たない）
           const postRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
@@ -95,7 +98,8 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
           const result = await tryFetchReport();
           if (cancelled) return;
           if (result === "ok") return setStatus("ok");
-          if (result === "error") return setStatus("error");
+          // ここでの "failed" は今まさに起動した新しい試行の失敗なので、無限リトライせず終端エラーにする。
+          if (result === "error" || result === "failed") return setStatus("error");
           // "pending" / "not_generated"（stale ジョブ後の一時的な 404）はポーリング継続
         }
         setStatus("error");
