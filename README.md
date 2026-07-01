@@ -16,6 +16,8 @@
 - 通話・通知などでアプリが background/inactive に遷移した時は `AppState` を監視して録音を強制停止し、固まった状態にならないようにしている
 - `lib/` 配下の DOM 非依存ロジック（period.ts 等）は後続フェーズで yuzu-app からコピーして使う想定（今はまだ持ち込んでいない）
 - デザインは [yuzu-app の DESIGN.md](https://github.com/studiocon/yuzu-app/blob/main/DESIGN.md) を Source of Truth とし、`lib/theme.ts` にトークン化（カラー・タイプスケール・角丸・easing）。英字ラベル/数値は Unbounded（`@expo-google-fonts/unbounded`）、アイコンは Phosphor（`phosphor-react-native`）に統一。**LINE Seed JP（日本語本文用フォント）はフォントファイル未取得のためネイティブには未バンドル**で、日本語テキストは OS 標準フォントにフォールバックしている（Web 版は Google Fonts CDN から読むため未対応で問題にならないが、Native は CDN `<link>` が使えないため要対応）
+- Unbounded フォントはバレル（`@expo-google-fonts/unbounded`）経由だと使わないウェイトまでバンドルされる（Metroの制約でCJS requireがtree-shakeされない）ため、`App.tsx` では使うウェイトだけ個別パスから直接importしてバンドルサイズを約2.9MB削減している（`declarations.d.ts` に `.ttf` の型宣言）
+- `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` は起動時にバリデーションし、未設定なら分かりやすいエラーで即座に落とす（[lib/supabase.ts](lib/supabase.ts)）
 
 ## セットアップ
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   AppState,
@@ -33,25 +33,13 @@ import {
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { formatDuration } from "../lib/stats";
 import { sentimentColor } from "../lib/sentimentColor";
-import { loadSentimentCache, saveSentimentCache } from "../lib/sentimentCache";
+import { useSentimentScores } from "../lib/useSentimentScores";
+import type { Post } from "../lib/types";
 import IndexDetailModal from "./IndexDetailModal";
-
-// yuzu-app の analyze-sentiment と同じ 30 日ウィンドウ（それより古い投稿はスコア化しない）。
-const SENTIMENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Phase = "idle" | "recording" | "carving" | "carved" | "error";
-
-type LogEntry = {
-  id: string;
-  text: string;
-  index: number;
-  createdAt: number;
-  marked: boolean;
-  durationMs: number;
-  charCount: number;
-};
 
 type Stats = {
   streak: number;
@@ -73,49 +61,104 @@ const PHASE_LABEL: Partial<Record<Phase, string>> = {
   carved: "CARVED",
 };
 
+// 部分的な更新パッチを既存 Stats にマージする（finishRecording 内の2箇所で同じ
+// 「サーバ値があればそれを、無ければ前の値を使う」パターンが重複していたのを共通化）。
+function mergeStats(prev: Stats | null, patch: Partial<Stats>): Stats {
+  return {
+    streak: patch.streak ?? prev?.streak ?? 0,
+    todayCount: patch.todayCount ?? prev?.todayCount ?? 0,
+    maxDaily: patch.maxDaily ?? prev?.maxDaily ?? 0,
+    totalCount: patch.totalCount ?? prev?.totalCount ?? 0,
+    totalMinutes: patch.totalMinutes ?? prev?.totalMinutes ?? 0,
+  };
+}
+
 // LOG カード本文下の擬似「声紋」。録音長に比例した本数、id 由来の決定的な高さ。
-function Voiceprint({ id, durationMs }: { id: string; durationMs: number }) {
-  const barCount = voiceprintBarCount(durationMs);
-  if (barCount === null) return null;
-  const heights = seededHeights(id, barCount);
+const Voiceprint = memo(function Voiceprint({ id, durationMs }: { id: string; durationMs: number }) {
+  const bars = useMemo(() => {
+    const barCount = voiceprintBarCount(durationMs);
+    return barCount === null ? null : seededHeights(id, barCount);
+  }, [id, durationMs]);
+  if (!bars) return null;
   return (
     <View style={styles.voiceprint}>
-      {heights.map((h, i) => (
+      {bars.map((h, i) => (
         <View key={i} style={[styles.voiceprintBar, { height: Math.max(1, Math.round(h * 20)) }]} />
       ))}
     </View>
   );
-}
+});
+
+// LOG 一覧の1行。声紋・感情カラーの再計算を親の再レンダーから切り離すため memo 化。
+const LogRow = memo(function LogRow({
+  post,
+  edgeColor,
+  onPress,
+}: {
+  post: Post;
+  edgeColor: string | null;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`#${post.index} を開く`}
+      style={({ pressed }) => [
+        styles.logRow,
+        post.marked && styles.logRowMarked,
+        pressed && styles.logRowPressed,
+      ]}
+    >
+      {edgeColor && <View style={[styles.logEdge, { backgroundColor: edgeColor }]} />}
+      <View style={styles.logRowHead}>
+        <Text style={styles.logIndex}>#{String(post.index).padStart(3, "0")}</Text>
+        {post.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(post.durationMs)}</Text>}
+      </View>
+      <Text style={styles.logText} numberOfLines={5}>{post.text}</Text>
+      <Voiceprint id={post.id} durationMs={post.durationMs} />
+    </Pressable>
+  );
+});
 
 export default function RecordScreen({ session }: { session: Session }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState("");
   const [carvedPost, setCarvedPost] = useState<CarvedPost | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<Post[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [firstPostAt, setFirstPostAt] = useState<number | null>(null);
-  const [selectedPost, setSelectedPost] = useState<LogEntry | null>(null);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const [scoresHydrated, setScoresHydrated] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
   const startedAtRef = useRef(0);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
+  const mountedRef = useRef(true);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const carvedAnim = useRef(new Animated.Value(0)).current;
+
+  const scores = useSentimentScores(logs, API_BASE, session.access_token);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const fetchLogs = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/records?limit=20`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok || !mountedRef.current) return;
       const data = await res.json();
+      if (!mountedRef.current) return;
       const posts = Array.isArray(data?.posts) ? data.posts : [];
       setLogs(
         posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number; char_count?: number }) => ({
@@ -143,60 +186,13 @@ export default function RecordScreen({ session }: { session: Session }) {
     } catch {
       // 一覧取得失敗は録音フローを止めない。silent skip。
     } finally {
-      setLogsLoaded(true);
+      if (mountedRef.current) setLogsLoaded(true);
     }
   }, [session.access_token]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
-
-  // 感情スコア: AsyncStorage から hydrate（yuzu-app の localStorage hydrate に相当）
-  useEffect(() => {
-    loadSentimentCache().then((cached) => {
-      setScores(cached);
-      setScoresHydrated(true);
-    });
-  }, []);
-
-  // 未解析の投稿だけ /api/analyze-sentiment に投げてスコアを埋める。
-  // スコアはDBに永続化されない装飾情報のため、失敗しても録音フローには影響させない。
-  useEffect(() => {
-    if (!scoresHydrated || logs.length === 0) return;
-    const cutoff = Date.now() - SENTIMENT_WINDOW_MS;
-    const unresolved = logs.filter((l) => l.createdAt >= cutoff && !(l.id in scores));
-    if (unresolved.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/analyze-sentiment`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            posts: unresolved.map((l) => ({ id: l.id, text: l.text, createdAt: l.createdAt })),
-          }),
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { results: { postId: string; score: number }[] };
-        if (cancelled) return;
-        setScores((prev) => {
-          const next = { ...prev };
-          for (const r of data.results) next[r.postId] = r.score;
-          saveSentimentCache(next);
-          return next;
-        });
-      } catch {
-        // silent: 次回再試行（スコアはあくまで装飾、無くても致命ではない）
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [scoresHydrated, logs, session.access_token]);
 
   // 録音中: mic-recording-pulse（scale 1 → 1.04 をループ）
   useEffect(() => {
@@ -295,6 +291,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       });
       if (!res.ok) throw new Error("mark failed");
     } catch {
+      if (!mountedRef.current) return;
       setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked: !marked } : l)));
       setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked: !marked } : prev));
     }
@@ -362,6 +359,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         body: form,
       });
       const sttData = await sttRes.json();
+      if (!mountedRef.current) return;
       if (!sttRes.ok) {
         setPhase("error");
         setText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
@@ -383,19 +381,14 @@ export default function RecordScreen({ session }: { session: Session }) {
         body: JSON.stringify({ text: transcript, durationMs }),
       });
       const saveData = await saveRes.json();
+      if (!mountedRef.current) return;
       if (!saveRes.ok) {
         setPhase("error");
         const errCode = saveData?.error;
         if (errCode === "daily_limit") {
           setText(`今日はここまで（${saveRes.status}）`);
           if (typeof saveData?.todayCount === "number") {
-            setStats((prev) => ({
-              streak: prev?.streak ?? 0,
-              todayCount: saveData.todayCount,
-              maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
-              totalCount: prev?.totalCount ?? 0,
-              totalMinutes: prev?.totalMinutes ?? 0,
-            }));
+            setStats((prev) => mergeStats(prev, { todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
           setText("ログインし直せ");
@@ -408,16 +401,17 @@ export default function RecordScreen({ session }: { session: Session }) {
       setPhase("carved");
       setCarvedPost({ index: saveData.post.index, text: transcript });
       if (typeof saveData?.streak === "number") {
-        setStats((prev) => ({
-          streak: saveData.streak,
-          todayCount: saveData.todayCount ?? prev?.todayCount ?? 0,
-          maxDaily: saveData.maxDaily ?? prev?.maxDaily ?? 0,
-          totalCount: prev?.totalCount ?? 0,
-          totalMinutes: prev?.totalMinutes ?? 0,
-        }));
+        setStats((prev) =>
+          mergeStats(prev, {
+            streak: saveData.streak,
+            todayCount: saveData.todayCount,
+            maxDaily: saveData.maxDaily,
+          }),
+        );
       }
       fetchLogs();
     } catch {
+      if (!mountedRef.current) return;
       setPhase("error");
       setText("送れなかった。もう一度。");
     }
@@ -425,6 +419,13 @@ export default function RecordScreen({ session }: { session: Session }) {
 
   const phaseLabel = limitReached ? undefined : PHASE_LABEL[phase];
   const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : 0;
+
+  const renderItem = useCallback(
+    ({ item }: { item: Post }) => (
+      <LogRow post={item} edgeColor={sentimentColor(scores[item.id])} onPress={() => setSelectedPost(item)} />
+    ),
+    [scores],
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -523,29 +524,7 @@ export default function RecordScreen({ session }: { session: Session }) {
             colors={[colors.yuzuZest]}
           />
         }
-        renderItem={({ item }) => {
-          const edgeColor = sentimentColor(scores[item.id]);
-          return (
-            <Pressable
-              onPress={() => setSelectedPost(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`#${item.index} を開く`}
-              style={({ pressed }) => [
-                styles.logRow,
-                item.marked && styles.logRowMarked,
-                pressed && styles.logRowPressed,
-              ]}
-            >
-              {edgeColor && <View style={[styles.logEdge, { backgroundColor: edgeColor }]} />}
-              <View style={styles.logRowHead}>
-                <Text style={styles.logIndex}>#{String(item.index).padStart(3, "0")}</Text>
-                {item.durationMs > 0 && <Text style={styles.logDuration}>{formatDuration(item.durationMs)}</Text>}
-              </View>
-              <Text style={styles.logText} numberOfLines={5}>{item.text}</Text>
-              <Voiceprint id={item.id} durationMs={item.durationMs} />
-            </Pressable>
-          );
-        }}
+        renderItem={renderItem}
       />
 
       <IndexDetailModal
@@ -553,7 +532,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         firstPostAt={firstPostAt}
         score={selectedPost ? scores[selectedPost.id] : undefined}
         onClose={() => setSelectedPost(null)}
-        onToggleMark={(updated) => applyMark(updated.id, updated.marked)}
+        onToggleMark={applyMark}
       />
     </SafeAreaView>
   );

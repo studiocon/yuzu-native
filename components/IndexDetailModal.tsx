@@ -7,26 +7,17 @@ import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/
 import { dayNumberSince, formatDuration } from "../lib/stats";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { sentimentColor } from "../lib/sentimentColor";
+import type { Post } from "../lib/types";
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
-type DetailPost = {
-  id: string;
-  text: string;
-  index: number;
-  createdAt: number;
-  marked: boolean;
-  durationMs: number;
-  charCount: number;
-};
-
 type Props = {
-  post: DetailPost | null;
+  post: Post | null;
   firstPostAt: number | null;
   /** 感情スコア（-1.0〜1.0）。未解析なら undefined → 見出し帯の左端バー・声紋ヒーローは無色。 */
   score?: number;
   onClose: () => void;
-  onToggleMark: (post: DetailPost) => void;
+  onToggleMark: (id: string, marked: boolean) => void;
 };
 
 function pad2(n: number): string {
@@ -79,7 +70,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
     if (!post) return;
     const next = !marked;
     setMarked(next);
-    onToggleMark({ ...post, marked: next });
+    onToggleMark(post.id, next);
     if (next) {
       setJustMarked(true);
       setTimeout(() => setJustMarked(false), 900);
