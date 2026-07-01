@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
@@ -42,18 +42,23 @@ const Voiceprint = memo(function Voiceprint({ id, durationMs }: { id: string; du
   );
 });
 
+// onOpenDetail は RecordScreen の setSelectedPost（安定参照）をそのまま受け取り、ここで
+// post を束ねて呼び出す。親の renderItem が毎回 `() => onOpenDetail(item.post)` という
+// 新しい関数を作って渡していると、post/edgeColor が変わっていなくても onPress の参照が
+// 毎回変わるため memo() が効かなくなる（scores の更新のたびに全行が再レンダーされていた）。
 const LogRow = memo(function LogRow({
   post,
   edgeColor,
-  onPress,
+  onOpenDetail,
 }: {
   post: Post;
   edgeColor: string | null;
-  onPress: () => void;
+  onOpenDetail: (post: Post) => void;
 }) {
+  const handlePress = useCallback(() => onOpenDetail(post), [onOpenDetail, post]);
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`#${post.index} を開く`}
       style={({ pressed }) => [styles.logRow, post.marked && styles.logRowMarked, pressed && styles.logRowPressed]}
@@ -131,6 +136,19 @@ export default function LogScreen({
     return out;
   }, [groups]);
 
+  const renderItem = useCallback(
+    ({ item }: { item: Row }) =>
+      item.kind === "divider" ? (
+        <View style={styles.divider}>
+          <View style={styles.dividerDot} />
+          <Text style={styles.dividerLabel}>{item.label}</Text>
+        </View>
+      ) : (
+        <LogRow post={item.post} edgeColor={sentimentColor(scores[item.post.id])} onOpenDetail={onOpenDetail} />
+      ),
+    [scores, onOpenDetail],
+  );
+
   return (
     <FlatList
       ref={listRef}
@@ -173,16 +191,7 @@ export default function LogScreen({
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.inkMuted} colors={[colors.yuzuZest]} />
       }
-      renderItem={({ item }) =>
-        item.kind === "divider" ? (
-          <View style={styles.divider}>
-            <View style={styles.dividerDot} />
-            <Text style={styles.dividerLabel}>{item.label}</Text>
-          </View>
-        ) : (
-          <LogRow post={item.post} edgeColor={sentimentColor(scores[item.post.id])} onPress={() => onOpenDetail(item.post)} />
-        )
-      }
+      renderItem={renderItem}
     />
   );
 }

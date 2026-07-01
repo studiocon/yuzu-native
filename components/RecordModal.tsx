@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import type { AudioRecorder } from "expo-audio";
 import Svg, { Circle } from "react-native-svg";
 import { MicrophoneIcon, MicrophoneSlashIcon, XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing } from "../lib/theme";
@@ -25,10 +26,12 @@ type Props = {
   phase: ModalPhase;
   statusText: string;
   permissionDenied: boolean;
-  level: number;
-  recordingElapsed: number;
+  recorder: AudioRecorder;
+  /** 録音開始時刻（Date.now()）。録音中でなければ null。経過時間の算出用。 */
+  recordingStartedAt: number | null;
   prompt: string;
   remaining: number;
+  maxDaily: number;
   limitReached: boolean;
   carvedPost: CarvedPost | null;
   week: WeekDay[];
@@ -62,10 +65,11 @@ function ModalBody({
   phase,
   statusText,
   permissionDenied,
-  level,
-  recordingElapsed,
+  recorder,
+  recordingStartedAt,
   prompt,
   remaining,
+  maxDaily,
   limitReached,
   carvedPost,
   week,
@@ -90,6 +94,22 @@ function ModalBody({
     const t = setTimeout(() => setPromptShown(true), 1500);
     return () => clearTimeout(t);
   }, [isIdleHero]);
+
+  // カウントダウン表示とリングの進捗だけがこの経過時間を必要とする。以前は RecordScreen が
+  // 200ms ごとに state 更新し、そのたびに LOG/INSIGHT タブを含む画面全体を再レンダーしていた。
+  // ここに閉じ込めることで、再レンダー範囲を「モーダルが開いている間だけ」に限定する。
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  useEffect(() => {
+    if (!isRecording || recordingStartedAt === null) {
+      setRecordingElapsed(0);
+      return;
+    }
+    setRecordingElapsed(Date.now() - recordingStartedAt);
+    const id = setInterval(() => {
+      setRecordingElapsed(Date.now() - recordingStartedAt);
+    }, 200);
+    return () => clearInterval(id);
+  }, [isRecording, recordingStartedAt]);
 
   const canClose = phase === "idle" || phase === "carved" || phase === "error";
   const remainingMs = Math.max(0, MAX_RECORD_MS - recordingElapsed);
@@ -122,7 +142,7 @@ function ModalBody({
         />
       ) : limitReached ? (
         <View style={styles.limitView}>
-          <Text style={styles.limitCount}>3 / 3</Text>
+          <Text style={styles.limitCount}>{maxDaily} / {maxDaily}</Text>
           <Text style={styles.limitMsg}>今日はここまで。{"\n"}明日また話せ。</Text>
         </View>
       ) : (
@@ -132,7 +152,7 @@ function ModalBody({
 
           <View style={styles.stage}>
             {phase === "idle" && <FloatingDots />}
-            {isRecording && <Waveform level={level} />}
+            {isRecording && <Waveform recorder={recorder} />}
             {isBusy && <Spinner />}
           </View>
 

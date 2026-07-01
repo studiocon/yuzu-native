@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { AppState, FlatList, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import {
@@ -52,8 +52,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [phase, setPhase] = useState<ModalPhase>("idle");
   const [statusText, setStatusText] = useState("");
   const [permissionDenied, setPermissionDenied] = useState(false);
-  const [level, setLevel] = useState(0);
-  const [recordingElapsed, setRecordingElapsed] = useState(0);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
   const [carvedPost, setCarvedPost] = useState<CarvedPost | null>(null);
   const [logs, setLogs] = useState<Post[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
@@ -70,8 +69,6 @@ export default function RecordScreen({ session }: { session: Session }) {
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
   const mountedRef = useRef(true);
-  const meterTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<LogRowItem>>(null);
   const insets = useSafeAreaInsets();
 
@@ -81,8 +78,6 @@ export default function RecordScreen({ session }: { session: Session }) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (meterTimerRef.current) clearInterval(meterTimerRef.current);
-      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
     };
   }, []);
 
@@ -127,45 +122,19 @@ export default function RecordScreen({ session }: { session: Session }) {
     fetchLogs();
   }, [fetchLogs]);
 
-  // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する
-  // （AppState は expo-audio 側でも扱うが、UI 状態のリセットのため保険で監視）
+  // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する。
   useEffect(() => {
-    return () => {
-      if (meterTimerRef.current) clearInterval(meterTimerRef.current);
-      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-    };
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active" || !armedRef.current) return;
+      armedRef.current = false;
+      pendingReleaseRef.current = false;
+      setRecordingStartedAt(null);
+      recorderRef.current.stop().catch(() => {});
+      setPhase("error");
+      setStatusText("中断された、もう一度");
+    });
+    return () => sub.remove();
   }, []);
-
-  function startTimers() {
-    stopTimers();
-    setLevel(0);
-    setRecordingElapsed(0);
-    meterTimerRef.current = setInterval(() => {
-      try {
-        const status = recorderRef.current.getStatus();
-        const db = typeof status.metering === "number" ? status.metering : -60;
-        // dB(-60..0) を 0..1 に正規化。弱声も反応するよう底上げ。
-        const norm = Math.max(0, Math.min(1, (db + 60) / 55));
-        setLevel(norm);
-      } catch {
-        setLevel(0);
-      }
-    }, 90);
-    elapsedTimerRef.current = setInterval(() => {
-      setRecordingElapsed(Date.now() - startedAtRef.current);
-    }, 200);
-  }
-
-  function stopTimers() {
-    if (meterTimerRef.current) {
-      clearInterval(meterTimerRef.current);
-      meterTimerRef.current = null;
-    }
-    if (elapsedTimerRef.current) {
-      clearInterval(elapsedTimerRef.current);
-      elapsedTimerRef.current = null;
-    }
-  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -208,13 +177,12 @@ export default function RecordScreen({ session }: { session: Session }) {
 
   function closeRecord() {
     setRecordOpen(false);
-    stopTimers();
     armedRef.current = false;
     pendingReleaseRef.current = false;
     setPhase("idle");
     setStatusText("");
     setCarvedPost(null);
-    setLevel(0);
+    setRecordingStartedAt(null);
   }
 
   async function handlePressIn() {
@@ -235,7 +203,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     startedAtRef.current = Date.now();
     setPhase("recording");
     setCarvedPost(null);
-    startTimers();
+    setRecordingStartedAt(startedAtRef.current);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (pendingReleaseRef.current) {
@@ -254,8 +222,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   async function finishRecording() {
     armedRef.current = false;
     pendingReleaseRef.current = false;
-    stopTimers();
-    setLevel(0);
+    setRecordingStartedAt(null);
     await recorder.stop();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -327,7 +294,9 @@ export default function RecordScreen({ session }: { session: Session }) {
     }
   }
 
-  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : 3;
+  // stats 未取得時のフォールバックはサーバ側の実際の上限（lib/constants.ts MAX_DAILY_SESSIONS）と揃える。
+  const maxDaily = stats?.maxDaily ?? 1;
+  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : maxDaily;
   const chromeHidden = !!selectedPost || settingsOpen || recordOpen;
 
   // CompleteView 用の 7 日帯 + STREAK（サーバ値と client 計算の大きい方）。
@@ -365,10 +334,11 @@ export default function RecordScreen({ session }: { session: Session }) {
         phase={phase}
         statusText={statusText}
         permissionDenied={permissionDenied}
-        level={level}
-        recordingElapsed={recordingElapsed}
+        recorder={recorder}
+        recordingStartedAt={recordingStartedAt}
         prompt={prompt}
         remaining={remaining}
+        maxDaily={maxDaily}
         limitReached={limitReached}
         carvedPost={carvedPost}
         week={week}
