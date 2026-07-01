@@ -14,17 +14,22 @@ import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/
 
 type Step = "email" | "code";
 
+// 厳密なRFC検証はしない。明らかに未完成な入力（@や.が無い等）だけ弾いて
+// 無駄な送信リクエストを減らすための軽いチェック。
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
+
 export default function AuthScreen() {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const isEmailValid = EMAIL_PATTERN.test(email.trim());
 
   // ディープリンク（exp://）のリダイレクト一致が不安定なため、6桁コード入力に統一。
   // emailRedirectTo を渡さなければメールのリンクではなく数字コードが主導線になる。
   async function handleSend() {
-    if (!email.trim()) return;
+    if (!isEmailValid) return;
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
@@ -80,6 +85,9 @@ export default function AuthScreen() {
                 onChangeText={setEmail}
                 editable={!loading}
                 accessibilityLabel="メールアドレス"
+                autoFocus
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
               />
               {error !== "" && (
                 <Text style={styles.error} accessibilityLiveRegion="polite">{error}</Text>
@@ -87,7 +95,7 @@ export default function AuthScreen() {
               <Pressable
                 style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
                 onPress={handleSend}
-                disabled={loading || !email.trim()}
+                disabled={loading || !isEmailValid}
                 accessibilityRole="button"
                 accessibilityLabel="コードを送れ"
               >
@@ -108,6 +116,9 @@ export default function AuthScreen() {
                 onChangeText={setCode}
                 editable={!loading}
                 accessibilityLabel="認証コード"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleVerify}
               />
               {error !== "" && (
                 <Text style={styles.error} accessibilityLiveRegion="polite">{error}</Text>

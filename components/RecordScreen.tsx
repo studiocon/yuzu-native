@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   AppState,
   Easing,
@@ -10,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import {
   RecordingPresets,
@@ -138,6 +139,8 @@ export default function RecordScreen({ session }: { session: Session }) {
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
   const mountedRef = useRef(true);
+  const listRef = useRef<FlatList<Post>>(null);
+  const insets = useSafeAreaInsets();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const carvedAnim = useRef(new Animated.Value(0)).current;
@@ -302,6 +305,9 @@ export default function RecordScreen({ session }: { session: Session }) {
   async function handlePressIn() {
     if (phase === "carving" || limitReached) return;
     pendingReleaseRef.current = false;
+    // 録音FABは画面下部に固定表示（LOGが伸びてスクロールしていても常に押せる）だが、
+    // 状態pill・CARVEDカードはヘッダー側にあるので、録音開始時にトップへ戻して見えるようにする。
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setPhase("error");
@@ -428,9 +434,10 @@ export default function RecordScreen({ session }: { session: Session }) {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <FlatList
-        contentContainerStyle={styles.list}
+        ref={listRef}
+        contentContainerStyle={[styles.list, { paddingBottom: 96 + insets.bottom + spacing.xl * 2 }]}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.title}>YUZU</Text>
@@ -452,28 +459,6 @@ export default function RecordScreen({ session }: { session: Session }) {
                 </View>
               </View>
             )}
-
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <Pressable
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                disabled={limitReached || phase === "carving"}
-                accessibilityRole="button"
-                accessibilityLabel={phase === "recording" ? "録音を停止" : "長押しで録音開始"}
-                style={({ pressed }) => [
-                  styles.fab,
-                  phase === "recording" && styles.fabRecording,
-                  limitReached && styles.fabDisabled,
-                  pressed && styles.fabPressed,
-                ]}
-              >
-                {phase === "carving" ? (
-                  <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
-                ) : (
-                  <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
-                )}
-              </Pressable>
-            </Animated.View>
 
             {phaseLabel ? (
               <Text style={styles.pill}>{phaseLabel}</Text>
@@ -510,8 +495,14 @@ export default function RecordScreen({ session }: { session: Session }) {
               <Text style={styles.signOut}>サインアウト</Text>
             </Pressable>
 
-            {logs.length > 0 && <Text style={styles.logHeader}>LOG</Text>}
-            {logsLoaded && logs.length === 0 && <Text style={styles.empty}>話せ</Text>}
+            {logsLoaded ? (
+              <>
+                {logs.length > 0 && <Text style={styles.logHeader}>LOG</Text>}
+                {logs.length === 0 && <Text style={styles.empty}>話せ</Text>}
+              </>
+            ) : (
+              <ActivityIndicator color={colors.inkMuted} style={styles.loadingIndicator} />
+            )}
           </View>
         }
         data={logs}
@@ -526,6 +517,32 @@ export default function RecordScreen({ session }: { session: Session }) {
         }
         renderItem={renderItem}
       />
+
+      {/* 録音FABはyuzu-appの .fab-record と同じく画面下部に固定。LOGが伸びてスクロールしていても常に押せる。 */}
+      <Animated.View
+        pointerEvents="box-none"
+        style={[styles.fabWrap, { bottom: insets.bottom + spacing.xl, transform: [{ scale: pulseAnim }] }]}
+      >
+        <Pressable
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          disabled={limitReached || phase === "carving"}
+          accessibilityRole="button"
+          accessibilityLabel={phase === "recording" ? "録音を停止" : "長押しで録音開始"}
+          style={({ pressed }) => [
+            styles.fab,
+            phase === "recording" && styles.fabRecording,
+            limitReached && styles.fabDisabled,
+            pressed && styles.fabPressed,
+          ]}
+        >
+          {phase === "carving" ? (
+            <Animated.View style={[styles.spinner, { transform: [{ rotate: spin }] }]} />
+          ) : (
+            <MicrophoneIcon size={32} color={colors.ink} weight="bold" />
+          )}
+        </Pressable>
+      </Animated.View>
 
       <IndexDetailModal
         post={selectedPost}
@@ -577,6 +594,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   statValue: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: colors.ink, lineHeight: fontSize.xxl },
+  fabWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   fab: {
     width: 96,
     height: 96,
@@ -649,4 +672,5 @@ const styles = StyleSheet.create({
   voiceprint: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 20, marginTop: 2, opacity: 0.45 },
   voiceprintBar: { flex: 1, minWidth: 1, backgroundColor: colors.inkMuted },
   empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.xl },
+  loadingIndicator: { paddingTop: spacing.xl },
 });
