@@ -45,6 +45,15 @@ npm install
 
 ログインはメールアドレス送信 → 届いたメール内のコードを入力するだけ。Redirect URL の登録は不要。
 
+## 開発
+
+```bash
+npm run lint   # eslint-config-expo（flat config, eslint.config.js）
+npm test       # jest-expo。DOM非依存ロジック（voiceprint/sentimentColor/stats）の単体テスト
+```
+
+RN 実機/シミュレータが必要な画面コンポーネント（`components/`）は現状テスト対象外。`lib/` 配下の純粋関数から優先的にカバーしている。
+
 ## 実機で動かす
 
 ⚠️ Haptics は **iOS Simulator では鳴らない**。物理 iPhone 必須。
@@ -77,6 +86,24 @@ npm run ios
 
 無料 Apple ID（Personal Team）の場合、7日ごとに再インストールが必要。TestFlight に進むには Apple Developer Program（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）への加入が必須。
 
+### EAS Build（TestFlight 提出用）
+
+`eas.json` に `development` / `preview` / `production` の3プロファイルを用意済み。ただしこのリポジトリはまだ **EAS プロジェクトに未リンク**（`eas init` 未実施）。Apple Developer Program 加入者が以下を一度だけ実行する必要がある:
+
+```bash
+npx eas login          # Expo アカウントでログイン
+npx eas init            # app.json に expo.extra.eas.projectId が書き込まれる
+npx eas build:configure # iOS の Bundle Identifier / 証明書設定を対話的に行う
+```
+
+リンク後は：
+
+```bash
+npm run build:ios:preview     # 社内配布用（Ad Hoc / internal distribution）
+npm run build:ios:production  # ストア提出用
+npm run submit:ios             # ビルド済みアーカイブを App Store Connect に提出
+```
+
 ## 実機検証待ち（#64 チェックリスト）
 
 コードレベルでは実装・監査済みだが、この開発環境には物理iPhoneが無いため未確認の項目:
@@ -93,4 +120,6 @@ npm run ios
 
 - LINE Seed JP フォント未バンドル（上記「デザイン」参照）
 - 感情スコアはDBに永続化されない（yuzu-app と同じ設計。端末を変えると再解析が必要）
-- 自動テスト・Lint未整備（テストフレームワーク未導入）
+- `eas.json` は用意済みだが EAS プロジェクト自体は未リンク（`eas init` 未実施。Apple Developer Program 加入者が実施する想定）
+- Android 実機での検証記録なし（手順は iOS 前提のみ）
+- テストは `lib/` の純粋関数のみ。`components/` の画面コンポーネントは未カバー（RN実機/シミュレータでのE2E的な検証が必要なため）
