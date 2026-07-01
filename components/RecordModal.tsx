@@ -50,7 +50,7 @@ export default function RecordModal(props: Props) {
   const { visible } = props;
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={props.onClose} statusBarTranslucent>
-      <StatusBar hidden />
+      <StatusBar hidden hideTransitionAnimation="none" />
       <View style={styles.root}>
         <ModalBody {...props} />
       </View>

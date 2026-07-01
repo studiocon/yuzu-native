@@ -93,7 +93,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <StatusBar hidden />
+      <StatusBar hidden hideTransitionAnimation="none" />
       <SafeAreaView style={styles.safe}>
         <Pressable
           onPress={onClose}

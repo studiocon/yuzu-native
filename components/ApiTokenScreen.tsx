@@ -121,7 +121,7 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <StatusBar hidden />
+      <StatusBar hidden hideTransitionAnimation="none" />
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Text style={styles.headerLabel}>{step === "created" ? "ISSUED" : "CONNECT"}</Text>

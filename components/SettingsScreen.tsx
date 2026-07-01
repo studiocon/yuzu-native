@@ -41,7 +41,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <StatusBar hidden />
+      <StatusBar hidden hideTransitionAnimation="none" />
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable

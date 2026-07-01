@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { periodLabel } from "../lib/period";
 import EmotionChart from "./EmotionChart";
+import Skeleton from "./Skeleton";
 import type { ReportPayload } from "../lib/insightTypes";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
@@ -113,7 +114,7 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <StatusBar hidden />
+      <StatusBar hidden hideTransitionAnimation="none" />
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Text style={styles.headerLabel}>REPORTS</Text>
@@ -130,8 +131,15 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
 
         <ScrollView contentContainerStyle={styles.body}>
           {status === "loading" && (
-            <View style={styles.statusWrap}>
-              <ActivityIndicator color={colors.inkMuted} />
+            <View style={styles.skeletonWrap}>
+              <Skeleton width="70%" height={32} radius={4} />
+              <Skeleton width="80%" height={14} />
+              <Skeleton height={200} radius={4} />
+              <Skeleton height={14} />
+              <Skeleton height={14} />
+              <Skeleton width="65%" height={14} />
+              <Skeleton height={14} />
+              <Skeleton height={14} />
               <Text style={styles.statusSub}>AI が刻んでいる。画面を離れても、閉じても止まらない。</Text>
             </View>
           )}
@@ -234,7 +242,8 @@ const styles = StyleSheet.create({
   body: { padding: spacing.xl, gap: spacing.xl },
   statusWrap: { alignItems: "center", gap: spacing.md, paddingTop: spacing.xxl },
   status: { fontSize: fontSize.base, color: colors.inkSecondary, textAlign: "center" },
-  statusSub: { fontSize: fontSize.sm, color: colors.inkMuted, textAlign: "center" },
+  statusSub: { fontSize: fontSize.sm, color: colors.inkMuted },
+  skeletonWrap: { gap: 14 },
   retryBtn: { borderWidth: 1, borderColor: colors.ink, borderRadius: radius.button, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   retryLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: colors.ink, letterSpacing: fontSize.xs * letterSpacing.wide },
   article: { gap: spacing.xxl },
