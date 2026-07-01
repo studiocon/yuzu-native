@@ -1,15 +1,40 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { hierarchy, pack, type HierarchyCircularNode } from "d3-hierarchy";
 import Svg, { Circle, G, Text as SvgText } from "react-native-svg";
 import { colors, fontSize } from "../lib/theme";
+import { useSkeletonPulse } from "./Skeleton";
 import type { WordFreq } from "../lib/insightTypes";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Datum = { word: string; count: number; value: number };
 
 const VIEW = 320;
 const PADDING = 6;
 const LABEL_MIN_RADIUS = 18;
+
+// yuzu-app の SKELETON_DOTS（バブル形に寄せた読み込み中 placeholder）を移植。
+const SKELETON_DOTS = [
+  { cx: 160, cy: 150, r: 68 },
+  { cx: 96, cy: 205, r: 42 },
+  { cx: 226, cy: 200, r: 40 },
+  { cx: 240, cy: 108, r: 32 },
+  { cx: 92, cy: 96, r: 28 },
+  { cx: 168, cy: 248, r: 24 },
+  { cx: 54, cy: 160, r: 20 },
+];
+
+export function WordBubbleMapSkeleton() {
+  const opacity = useSkeletonPulse();
+  return (
+    <Svg width="100%" height={VIEW} viewBox={`0 0 ${VIEW} ${VIEW}`}>
+      {SKELETON_DOTS.map((d, i) => (
+        <AnimatedCircle key={i} cx={d.cx} cy={d.cy} r={d.r} fill={colors.divider} opacity={opacity} />
+      ))}
+    </Svg>
+  );
+}
 
 // yuzu-app の WordBubbleMap.tsx を移植。d3-hierarchy は DOM 非依存なので RN でもそのまま使える。
 export default function WordBubbleMap({ words }: { words: WordFreq[] }) {

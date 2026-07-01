@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
 import { computeSentimentSeries } from "../lib/sentimentSeries";
 import { DAY_MS } from "../lib/period";
 import { EmotionSection } from "./EmotionChart";
-import TimeHeatmap from "./TimeHeatmap";
-import WordBubbleMap from "./WordBubbleMap";
-import RecurringThemes from "./RecurringThemes";
-import ReportCard from "./ReportCard";
+import TimeHeatmap, { TimeHeatmapSkeleton } from "./TimeHeatmap";
+import WordBubbleMap, { WordBubbleMapSkeleton } from "./WordBubbleMap";
+import RecurringThemes, { RecurringThemesSkeleton } from "./RecurringThemes";
+import ReportCard, { ReportCardSkeleton } from "./ReportCard";
 import ReportDetailModal from "./ReportDetailModal";
 import type { Post } from "../lib/types";
 import type { HeatmapCell, ReportMeta, Theme, WordFreq } from "../lib/insightTypes";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 const SENTIMENT_WINDOW_MS = 30 * DAY_MS;
+// REPORTS の生成待ちポーリング間隔・上限（サーバの非同期生成が終わるのを黙って待つ）。
+const REPORTS_POLL_INTERVAL_MS = 5000;
+const REPORTS_POLL_TIMEOUT_MS = 2 * 60 * 1000;
 
 type Props = {
   posts: Post[];
@@ -46,20 +49,42 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
     accessToken,
     (r) => ({ themes: Array.isArray(r.themes) ? (r.themes as Theme[]) : [], notEnough: r.notEnough === true }),
   );
-  const reports = useApiGet<ReportMeta[]>(
-    `${API_BASE}/api/reports?scope=all`,
-    accessToken,
-    (r) => (Array.isArray(r.reports) ? (r.reports as ReportMeta[]) : []),
+  // REPORTS 一覧は独自管理（useApiGet だとポーリングの度に data が null に戻ってスケルトンへ
+  // 戻ってしまうため、既存データを保持したまま裏で再取得できるよう手書きする）。
+  const [reportsData, setReportsData] = useState<ReportMeta[] | null>(null);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const fetchReports = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reports?scope=all`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        setReportsError("失敗、話せ");
+        return;
+      }
+      const data = await res.json();
+      setReportsData(Array.isArray(data.reports) ? data.reports : []);
+      setReportsError(null);
+    } catch {
+      setReportsError("失敗、話せ");
+    }
+  }, [accessToken]);
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  const pendingCount = useMemo(
+    () => (reportsData ?? []).filter((m) => !m.generated && m.postCount > 0).length,
+    [reportsData],
   );
 
   // yuzu-app の InsightView と同じく、未生成かつ投稿ありのレポートを背景で先読み生成する
-  // （fire-and-forget POST）。これでユーザーがカードをタップした時にはサーバ側キャッシュが
-  // 温まっており、詳細モーダルの GET が即ヒットする。初回タップで生成待ち → タイムアウトで
-  // 「失敗、話せ」になる問題（特に投稿数の多い MONTH）を防ぐ。
+  // （fire-and-forget POST。サーバは即 202 を返しバックグラウンドで生成を続ける）。
+  // これでユーザーがカードをタップした時にはキャッシュが温まっており、詳細モーダルの GET が即ヒットする。
   const pregenFiredRef = useRef(false);
   useEffect(() => {
-    if (pregenFiredRef.current || reports.data === null) return;
-    const pending = reports.data.filter((m) => !m.generated && m.postCount > 0).slice(0, 4);
+    if (pregenFiredRef.current || reportsData === null) return;
+    const pending = reportsData.filter((m) => !m.generated && m.postCount > 0).slice(0, 4);
     if (pending.length === 0) return;
     pregenFiredRef.current = true;
     for (const m of pending) {
@@ -69,7 +94,19 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
         body: JSON.stringify({ scores }),
       }).catch(() => {});
     }
-  }, [reports.data, accessToken, scores]);
+  }, [reportsData, accessToken, scores]);
+
+  // 生成待ちが残っている間は、カードが完了状態に切り替わるのを裏で定期的に確認する。
+  // タブを離れずに待てるように（＝バッジ表示のまま自然に更新される）。上限を超えたら止める。
+  useEffect(() => {
+    if (pendingCount === 0) return;
+    const interval = setInterval(fetchReports, REPORTS_POLL_INTERVAL_MS);
+    const timeout = setTimeout(() => clearInterval(interval), REPORTS_POLL_TIMEOUT_MS);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [pendingCount, fetchReports]);
 
   return (
     <ScrollView contentContainerStyle={styles.body}>
@@ -79,7 +116,7 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
         {heatmap.error ? (
           <ErrorMsg message={heatmap.error} />
         ) : heatmap.data === null ? (
-          <ActivityIndicator color={colors.inkMuted} />
+          <TimeHeatmapSkeleton />
         ) : (
           <TimeHeatmap cells={heatmap.data} />
         )}
@@ -89,7 +126,7 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
         {words.error ? (
           <ErrorMsg message={words.error} />
         ) : words.data === null ? (
-          <ActivityIndicator color={colors.inkMuted} />
+          <WordBubbleMapSkeleton />
         ) : (
           <WordBubbleMap words={words.data} />
         )}
@@ -99,7 +136,7 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
         {themes.error ? (
           <ErrorMsg message={themes.error} />
         ) : themes.data === null ? (
-          <ActivityIndicator color={colors.inkMuted} />
+          <RecurringThemesSkeleton />
         ) : themes.data.notEnough ? (
           <EmptyMsg message="もっと話せ、パターンが見えてくる" />
         ) : themes.data.themes.length === 0 ? (
@@ -109,19 +146,19 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
         )}
       </Section>
 
-      <Section title="REPORTS">
-        {reports.error ? (
-          <ErrorMsg message={reports.error} />
-        ) : reports.data === null ? (
-          <ActivityIndicator color={colors.inkMuted} />
-        ) : reports.data.length === 0 ? (
+      <Section title="REPORTS" badge={pendingCount > 0 ? `${pendingCount} GENERATING` : undefined}>
+        {reportsError ? (
+          <ErrorMsg message={reportsError} />
+        ) : reportsData === null ? (
+          <ReportCardSkeleton />
+        ) : reportsData.length === 0 ? (
           <View style={styles.reportsEmpty}>
             <Text style={styles.reportsEmptyHeadline}>NOTHING TO READ YET</Text>
             <Text style={styles.reportsEmptyBody}>沈黙は記録されない、話せ</Text>
           </View>
         ) : (
           <View style={{ gap: spacing.md }}>
-            {reports.data.map((meta) => (
+            {reportsData.map((meta) => (
               <ReportCard key={meta.periodKey} meta={meta} onPress={() => setOpenReport(meta.periodKey)} />
             ))}
           </View>
@@ -138,10 +175,17 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {badge && (
+          <View style={styles.sectionBadge}>
+            <Text style={styles.sectionBadgeLabel}>{badge}</Text>
+          </View>
+        )}
+      </View>
       {children}
     </View>
   );
@@ -157,12 +201,25 @@ function EmptyMsg({ message }: { message: string }) {
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: spacing.md, paddingBottom: 140, gap: 0 },
   section: { gap: 10, paddingTop: 44 },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionTitle: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.lg,
     color: colors.ink,
     letterSpacing: fontSize.lg * letterSpacing.wider,
     textTransform: "uppercase",
+  },
+  sectionBadge: {
+    backgroundColor: colors.surfaceHover,
+    borderRadius: 9999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  sectionBadgeLabel: {
+    fontFamily: fonts.displayBold,
+    fontSize: 10,
+    color: colors.inkSecondary,
+    letterSpacing: 10 * letterSpacing.wide,
   },
   errorMsg: { fontSize: fontSize.base, color: colors.inkMuted },
   emptyMsg: { fontSize: fontSize.base, color: colors.inkMuted },

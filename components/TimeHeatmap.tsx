@@ -1,10 +1,31 @@
 import { useMemo, useState } from "react";
-import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
+import { useSkeletonPulse } from "./Skeleton";
 import type { HeatmapCell } from "../lib/insightTypes";
 
 const BUCKETS = 12;
 const DATE_LABEL_EVERY = 7;
+const SKELETON_COLS = 28;
+
+// yuzu-app の .time-heatmap-cell--skeleton（grid 形の読み込み中 placeholder）を移植。
+export function TimeHeatmapSkeleton() {
+  const opacity = useSkeletonPulse();
+  return (
+    <View style={styles.grid}>
+      {Array.from({ length: SKELETON_COLS }, (_, colIdx) => (
+        <View key={colIdx} style={[styles.col, styles.skeletonCol, colIdx === 0 && styles.skeletonColFirst]}>
+          {Array.from({ length: BUCKETS }, (_, bucket) => (
+            <Animated.View
+              key={bucket}
+              style={[styles.skeletonCell, bucket !== 0 && styles.skeletonCellSpaced, { opacity }]}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function fmtDateLabel(date: string): string {
   const [, m, d] = date.split("-");
@@ -111,4 +132,8 @@ const styles = StyleSheet.create({
   },
   emptyWrap: { paddingVertical: spacing.xl, alignItems: "center" },
   emptyMsg: { fontSize: fontSize.base, color: colors.inkMuted },
+  skeletonCol: { flex: 1, marginLeft: 2 },
+  skeletonColFirst: { marginLeft: 0 },
+  skeletonCell: { width: "100%", aspectRatio: 1, borderRadius: 2, backgroundColor: colors.divider },
+  skeletonCellSpaced: { marginTop: 2 },
 });

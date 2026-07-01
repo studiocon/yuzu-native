@@ -1,12 +1,15 @@
 import { memo, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { formatDuration } from "../lib/stats";
 import { sentimentColor } from "../lib/sentimentColor";
 import { useCountUp } from "../lib/useCountUp";
 import { jstDateString, DAY_MS } from "../lib/period";
+import Skeleton from "./Skeleton";
 import type { Post } from "../lib/types";
+
+const SKELETON_RECORD_COUNT = 4;
 
 const WEEKDAY_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -134,37 +137,30 @@ export default function LogScreen({
       contentContainerStyle={[styles.list, { paddingBottom: listFooterPadding }]}
       ListHeaderComponent={
         <View style={styles.header}>
-          {stats && (
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>RECORDS</Text>
-                <Text style={styles.statValue}>{recordsUp}</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>MINUTES</Text>
-                <Text style={styles.statValue}>{minutesUp}</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>STREAK</Text>
-                <Text style={styles.statValue}>{streakUp}</Text>
-              </View>
-            </View>
-          )}
+          <View style={styles.statsRow}>
+            <StatCard label="RECORDS" value={recordsUp} loading={!logsLoaded} />
+            <StatCard label="MINUTES" value={minutesUp} loading={!logsLoaded} />
+            <StatCard label="STREAK" value={streakUp} loading={!logsLoaded} />
+          </View>
 
-          {logsLoaded ? (
-            <View style={styles.recordsSectionHead}>
-              <Text style={styles.sectionTitle}>RECORDS</Text>
-              <View style={styles.filterRow}>
-                <Pressable onPress={() => setFilter("all")} style={styles.filterItem}>
-                  <Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>ALL</Text>
-                </Pressable>
-                <Pressable onPress={() => setFilter("marked")} style={styles.filterItem}>
-                  <Text style={[styles.filterLabel, filter === "marked" && styles.filterLabelActive]}>MARKED</Text>
-                </Pressable>
-              </View>
+          <View style={styles.recordsSectionHead}>
+            <Text style={styles.sectionTitle}>RECORDS</Text>
+            <View style={styles.filterRow}>
+              <Pressable onPress={() => setFilter("all")} style={styles.filterItem}>
+                <Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>ALL</Text>
+              </Pressable>
+              <Pressable onPress={() => setFilter("marked")} style={styles.filterItem}>
+                <Text style={[styles.filterLabel, filter === "marked" && styles.filterLabelActive]}>MARKED</Text>
+              </Pressable>
             </View>
-          ) : (
-            <ActivityIndicator color={colors.inkMuted} style={styles.loadingIndicator} />
+          </View>
+
+          {!logsLoaded && (
+            <View style={styles.skeletonList}>
+              {Array.from({ length: SKELETON_RECORD_COUNT }, (_, i) => (
+                <RecordCardSkeleton key={i} />
+              ))}
+            </View>
           )}
 
           {logsLoaded && filteredPosts.length === 0 && (
@@ -172,7 +168,7 @@ export default function LogScreen({
           )}
         </View>
       }
-      data={rows}
+      data={logsLoaded ? rows : []}
       keyExtractor={(item) => item.key}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.inkMuted} colors={[colors.yuzuZest]} />
@@ -188,6 +184,33 @@ export default function LogScreen({
         )
       }
     />
+  );
+}
+
+function StatCard({ label, value, loading }: { label: string; value: number; loading: boolean }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      {loading ? (
+        <Skeleton width={40} height={28} style={styles.statSkeleton} />
+      ) : (
+        <Text style={styles.statValue}>{value}</Text>
+      )}
+    </View>
+  );
+}
+
+// yuzu-app の .record-card-skeleton（kind行2つ + line + line-short）を移植。
+function RecordCardSkeleton() {
+  return (
+    <View style={styles.recordSkeletonCard}>
+      <View style={styles.skeletonRow}>
+        <Skeleton width={60} height={10} />
+        <Skeleton width={40} height={10} />
+      </View>
+      <Skeleton height={14} />
+      <Skeleton width="65%" height={14} />
+    </View>
   );
 }
 
@@ -212,6 +235,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   statValue: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: colors.ink, lineHeight: fontSize.xxl },
+  statSkeleton: { marginTop: (fontSize.xxl - 28) / 2 },
   recordsSectionHead: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -234,8 +258,17 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.widest,
   },
   filterLabelActive: { color: colors.ink, textDecorationLine: "underline", textDecorationColor: colors.yuzuZest },
-  loadingIndicator: { paddingTop: spacing.xl },
   empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.md },
+  skeletonList: { gap: spacing.md, paddingTop: spacing.sm },
+  recordSkeletonCard: {
+    gap: 10,
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: 4,
+  },
+  skeletonRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
   divider: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingTop: spacing.md },
   dividerDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.inkMuted },
   dividerLabel: {

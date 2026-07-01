@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -11,6 +11,7 @@ import type { ReportPayload } from "../lib/insightTypes";
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Status = "loading" | "ok" | "no_posts" | "in_progress" | "error";
+type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "error";
 
 type Props = {
   periodKey: string | null;
@@ -19,30 +20,15 @@ type Props = {
   onClose: () => void;
 };
 
-const MAX_AUTO_RETRIES = 2;
-const AUTO_RETRY_DELAY_MS = 4000;
+// POST は生成完了を待たない（yuzu-app と同じ非同期化。app/api/reports/[periodKey]/route.ts 参照）。
+// 202 が返ったら GET をポーリングして完了を待つ。maxDuration(60s) + バッファぶんは粘る。
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_ATTEMPTS = 30; // 3s * 30 = 90s
 
 export default function ReportDetailModal({ periodKey, accessToken, scores, onClose }: Props) {
   const [status, setStatus] = useState<Status>("loading");
   const [payload, setPayload] = useState<ReportPayload | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
-  const autoRetriesRef = useRef(0);
-
-  // periodKey が変わったら自動リトライ回数をリセット
-  useEffect(() => {
-    autoRetriesRef.current = 0;
-  }, [periodKey]);
-
-  // 生成タイムアウトで error になった場合、サーバは裏で生成を完了していることが多い。
-  // 少し待ってから GET を再試行するとキャッシュヒットで成功する（MONTH の初回対策）。
-  useEffect(() => {
-    if (status !== "error" || autoRetriesRef.current >= MAX_AUTO_RETRIES) return;
-    const t = setTimeout(() => {
-      autoRetriesRef.current += 1;
-      setRetryNonce((n) => n + 1);
-    }, AUTO_RETRY_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [status]);
 
   useEffect(() => {
     if (!periodKey) return;
@@ -50,37 +36,68 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
     setStatus("loading");
     setPayload(null);
 
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    async function tryFetchReport(): Promise<FetchResult> {
+      const getRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey!)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (getRes.status === 422) return "in_progress";
+      if (getRes.status === 202) return "pending";
+      if (getRes.ok) {
+        const data = (await getRes.json()) as { report?: { payload: ReportPayload } };
+        if (!data.report) return "error";
+        setPayload(data.report.payload);
+        return "ok";
+      }
+      if (getRes.status === 404) return "not_generated";
+      return "error";
+    }
+
     (async () => {
       try {
-        const getRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        // 1) まず GET（すでに生成済み or 進行中のジョブがあるか確認）
+        const first = await tryFetchReport();
         if (cancelled) return;
-        if (getRes.status === 422) return setStatus("in_progress");
-        if (getRes.ok) {
-          const data = (await getRes.json()) as { report?: { payload: ReportPayload } };
-          if (data.report) {
-            setPayload(data.report.payload);
-            setStatus("ok");
-            return;
-          }
-          return setStatus("error");
-        }
-        if (getRes.status !== 404) return setStatus("error");
+        if (first === "ok") return setStatus("ok");
+        if (first === "in_progress") return setStatus("in_progress");
+        if (first === "error") return setStatus("error");
 
-        const postRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ scores }),
-        });
-        if (cancelled) return;
-        if (postRes.status === 404) return setStatus("no_posts");
-        if (postRes.status === 422) return setStatus("in_progress");
-        if (!postRes.ok) return setStatus("error");
-        const data = (await postRes.json()) as { report?: { payload: ReportPayload } };
-        if (!data.report) return setStatus("error");
-        setPayload(data.report.payload);
-        setStatus("ok");
+        if (first === "not_generated") {
+          // 未生成 → POST で起動（202 を即返すだけなので待たない）
+          const postRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ scores }),
+          });
+          if (cancelled) return;
+          if (postRes.status === 404) return setStatus("no_posts");
+          if (postRes.status === 422) return setStatus("in_progress");
+          if (postRes.ok) {
+            const data = (await postRes.json()) as { report?: { payload: ReportPayload } };
+            if (data.report) {
+              // すでにキャッシュ済みだった場合の即応答フォールバック
+              setPayload(data.report.payload);
+              return setStatus("ok");
+            }
+          } else {
+            return setStatus("error");
+          }
+        }
+
+        // 2) ポーリング（生成完了 or 失敗 or 上限まで）
+        setStatus("loading");
+        for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+          if (cancelled) return;
+          await sleep(POLL_INTERVAL_MS);
+          if (cancelled) return;
+          const result = await tryFetchReport();
+          if (cancelled) return;
+          if (result === "ok") return setStatus("ok");
+          if (result === "error") return setStatus("error");
+          // "pending" / "not_generated"（stale ジョブ後の一時的な 404）はポーリング継続
+        }
+        setStatus("error");
       } catch {
         if (!cancelled) setStatus("error");
       }
@@ -150,12 +167,18 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
                 </Block>
               )}
 
-              <Block title="SURFACE">
-                <Paragraphs text={payload.manifest} />
+              <Block title="FACT">
+                <Paragraphs text={payload.fact} />
               </Block>
 
-              <Block title="DEPTH">
-                <Paragraphs text={payload.latent} />
+              {payload.proof.length > 0 && (
+                <Block title="PROOF">
+                  <Paragraphs text={payload.proof} />
+                </Block>
+              )}
+
+              <Block title="SHADOW">
+                <Paragraphs text={payload.shadow} />
               </Block>
 
               <Block title="ADVICE">

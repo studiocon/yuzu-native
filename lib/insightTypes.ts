@@ -4,8 +4,9 @@ import type { PeriodKind } from "./period";
 export type ReportPayload = {
   headline: string;
   topics: string[];
-  manifest: string;
-  latent: string;
+  fact: string;
+  proof: string;
+  shadow: string;
   advice: string;
   adviceDetail: string;
   sentimentSeries: { date: string; score: number }[];

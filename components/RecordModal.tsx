@@ -10,7 +10,9 @@ import { useCountUp } from "../lib/useCountUp";
 import FloatingDots from "./FloatingDots";
 import Waveform from "./Waveform";
 
-export const MAX_RECORD_MS = 3 * 60 * 1000;
+// yuzu-app の lib/constants.ts MAX_RECORD_MS と同じ値を維持すること。
+// 初期リリースはボリューム抑制のため 1 分に制限。
+export const MAX_RECORD_MS = 1 * 60 * 1000;
 const RING = 54;
 const CIRC = 2 * Math.PI * RING;
 

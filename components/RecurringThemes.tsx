@@ -1,7 +1,29 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, spacing } from "../lib/theme";
+import Skeleton from "./Skeleton";
 import type { Theme } from "../lib/insightTypes";
+
+const SKELETON_THEME_COUNT = 3;
+
+// yuzu-app の .theme-card-skeleton（rank/title/share行 + bar + line）を移植。
+export function RecurringThemesSkeleton() {
+  return (
+    <View style={styles.list}>
+      {Array.from({ length: SKELETON_THEME_COUNT }, (_, i) => (
+        <View key={i} style={styles.card}>
+          <View style={styles.head}>
+            <Skeleton width={18} height={11} />
+            <Skeleton width="60%" height={15} />
+            <Skeleton width={28} height={13} />
+          </View>
+          <Skeleton height={4} style={styles.skeletonBar} />
+          <Skeleton width="90%" height={14} />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 // yuzu-app の RecurringThemes.tsx（Spotify Wrapped 風マインドシェアランキング）を移植。
 export default function RecurringThemes({ themes }: { themes: Theme[] }) {
@@ -69,4 +91,5 @@ const styles = StyleSheet.create({
     lineHeight: fontSize.sm * 1.6,
     color: colors.inkSecondary,
   },
+  skeletonBar: { marginBottom: spacing.xs },
 });

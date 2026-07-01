@@ -3,10 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
-import { CaretLeftIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
+import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import ApiTokenScreen from "./ApiTokenScreen";
+import ContactScreen from "./ContactScreen";
 
 const VERSION = "1.0.0";
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
@@ -19,6 +21,8 @@ type Props = {
 
 export default function SettingsScreen({ visible, session, onClose }: Props) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tokenOpen, setTokenOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
 
   const email = session.user.email ?? "―";
@@ -54,12 +58,42 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={styles.body}>
+          <Section title="YOU">
+            <Row label="プラン" value="フリープラン" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
+          </Section>
+
+          <Section title="ALERT">
+            <Row label="メール通知" value="―" disabled />
+            <Row label="プッシュ通知" value="―" disabled />
+          </Section>
+
           <Section title="ACCOUNT">
             <Row label="メールアドレス" value={email} />
             <Pressable onPress={handleCopyId} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
               <Text style={styles.rowLabel}>ユーザーID</Text>
-              <Text style={styles.rowValueMono}>{idCopied ? "COPIED" : shortId}</Text>
+              <View style={styles.rowTrailing}>
+                <Text style={styles.rowValueMono}>{idCopied ? "COPIED" : shortId}</Text>
+              </View>
             </Pressable>
+          </Section>
+
+          <Section title="CONNECT">
+            <Pressable onPress={() => setTokenOpen(true)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+              <Text style={styles.rowLabel}>API トークン</Text>
+              <CaretRightIcon size={14} color={colors.inkMuted} />
+            </Pressable>
+          </Section>
+
+          <Section title="SUPPORT">
+            <Pressable onPress={() => setContactOpen(true)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+              <Text style={styles.rowLabel}>問い合わせ</Text>
+              <CaretRightIcon size={14} color={colors.inkMuted} />
+            </Pressable>
+          </Section>
+
+          <Section title="LEGAL">
+            <Row label="利用規約" value="" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
+            <Row label="プライバシーポリシー" value="" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
           </Section>
 
           <Section title="">
@@ -93,6 +127,14 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
             onClose();
           }}
         />
+
+        <ApiTokenScreen visible={tokenOpen} accessToken={session.access_token} onClose={() => setTokenOpen(false)} />
+        <ContactScreen
+          visible={contactOpen}
+          accessToken={session.access_token}
+          defaultEmail={session.user.email ?? ""}
+          onClose={() => setContactOpen(false)}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -107,11 +149,24 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  disabled,
+  trailing,
+}: {
+  label: string;
+  value: string;
+  disabled?: boolean;
+  trailing?: React.ReactNode;
+}) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, disabled && styles.rowDisabled]}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
+      <View style={styles.rowTrailing}>
+        {value !== "" && <Text style={styles.rowValue}>{value}</Text>}
+        {trailing}
+      </View>
     </View>
   );
 }
@@ -226,7 +281,9 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
   },
   rowPressed: { backgroundColor: colors.surfaceHover },
+  rowDisabled: { opacity: 0.5 },
   rowLabel: { fontSize: fontSize.base, color: colors.ink },
+  rowTrailing: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   rowValue: { fontSize: fontSize.sm, color: colors.inkMuted },
   rowValueMono: { fontSize: fontSize.sm, color: colors.inkMuted, fontFamily: fonts.displayRegular },
   dangerRow: {

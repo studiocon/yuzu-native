@@ -3,12 +3,34 @@ import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { formatPeriodRange } from "../lib/period";
 import { sentimentColor, SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
+import Skeleton from "./Skeleton";
 import type { ReportMeta } from "../lib/insightTypes";
 
 const SPARK_H = 40;
 const SPARK_ZERO = SPARK_H / 2;
 const SPARK_AMP = SPARK_H / 2 - 4;
 const SPARK_W = 100;
+const SKELETON_REPORT_COUNT = 3;
+
+// yuzu-app の .report-card-skeleton（kind/label/headline block + chips行）を移植。
+export function ReportCardSkeleton() {
+  return (
+    <View style={styles.skeletonList}>
+      {Array.from({ length: SKELETON_REPORT_COUNT }, (_, i) => (
+        <View key={i} style={styles.skeletonCard}>
+          <Skeleton width={60} height={10} />
+          <Skeleton width="50%" height={18} />
+          <Skeleton width="80%" height={14} />
+          <View style={styles.skeletonChips}>
+            <Skeleton width={60} height={22} radius={9999} />
+            <Skeleton width={60} height={22} radius={9999} />
+            <Skeleton width={60} height={22} radius={9999} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function buildSparkPaths(series: { score: number }[]) {
   if (series.length < 2) return null;
@@ -112,4 +134,14 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
     letterSpacing: fontSize.xs * letterSpacing.wide,
   },
+  skeletonList: { gap: spacing.md },
+  skeletonCard: {
+    gap: 10,
+    padding: 16,
+    backgroundColor: colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: 4,
+  },
+  skeletonChips: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
 });
