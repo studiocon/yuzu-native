@@ -100,6 +100,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   recorderRef.current = recorder;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const carvedAnim = useRef(new Animated.Value(0)).current;
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -188,6 +189,23 @@ export default function RecordScreen({ session }: { session: Session }) {
   }, [phase, spinAnim]);
 
   const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
+  // CARVED カード: card-slide-up 相当（opacity 0→1 / translateY 20→0）
+  useEffect(() => {
+    if (!carvedPost) {
+      carvedAnim.setValue(0);
+      return;
+    }
+    Animated.timing(carvedAnim, {
+      toValue: 1,
+      duration: 400,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [carvedPost, carvedAnim]);
+
+  const carvedOpacity = carvedAnim;
+  const carvedTranslateY = carvedAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] });
 
   // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する
   useEffect(() => {
@@ -414,10 +432,15 @@ export default function RecordScreen({ session }: { session: Session }) {
             )}
 
             {phase === "carved" && carvedPost && (
-              <View style={styles.carvedCard}>
+              <Animated.View
+                style={[
+                  styles.carvedCard,
+                  { opacity: carvedOpacity, transform: [{ translateY: carvedTranslateY }] },
+                ]}
+              >
                 <Text style={styles.carvedIndex}>#{String(carvedPost.index).padStart(3, "0")}</Text>
                 <Text style={styles.carvedText}>{carvedPost.text}</Text>
-              </View>
+              </Animated.View>
             )}
 
             {text !== "" && (
