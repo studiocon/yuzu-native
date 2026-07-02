@@ -3,6 +3,7 @@ import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-nati
 import Svg, { Defs, Line as SvgLine, LinearGradient, Path, Stop } from "react-native-svg";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
+import * as haptics from "../lib/haptics";
 import type { SentimentPoint } from "../lib/sentimentSeries";
 
 const CHART_H = 160;
@@ -83,6 +84,7 @@ export function EmotionSection({ data }: Props) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
   function handleAllPress() {
+    haptics.warning();
     setTooltipOpen(true);
     setTimeout(() => setTooltipOpen(false), 1800);
   }

@@ -4,6 +4,7 @@ import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/
 import { formatPeriodRange } from "../lib/period";
 import { sentimentColor, SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
 import Skeleton from "./Skeleton";
+import * as haptics from "../lib/haptics";
 import type { ReportMeta } from "../lib/insightTypes";
 
 const SPARK_H = 40;
@@ -59,7 +60,13 @@ export default function ReportCard({ meta, onPress }: { meta: ReportMeta; onPres
   const negGradId = `spark-neg-${meta.periodKey}`;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+    <Pressable
+      onPress={() => {
+        haptics.tapLight();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
       {edgeColor && <View style={[styles.edge, { backgroundColor: edgeColor }]} />}
       <View style={styles.head}>
         <Text style={[styles.kind, meta.kind === "month" && styles.kindFilled]}>{kindLabel}</Text>

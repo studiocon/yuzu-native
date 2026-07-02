@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { periodLabel } from "../lib/period";
+import * as haptics from "../lib/haptics";
 import EmotionChart from "./EmotionChart";
 import Skeleton from "./Skeleton";
 import type { ReportPayload } from "../lib/insightTypes";
@@ -149,7 +150,10 @@ function ModalBody({
       <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerLabel}>REPORTS</Text>
         <Pressable
-          onPress={onClose}
+          onPress={() => {
+            haptics.tapLight();
+            onClose();
+          }}
           accessibilityRole="button"
           accessibilityLabel="閉じる"
           hitSlop={12}
@@ -178,7 +182,13 @@ function ModalBody({
         {status === "error" && (
           <View style={styles.statusWrap}>
             <Text style={styles.status}>失敗、話せ</Text>
-            <Pressable onPress={() => setRetryNonce((n) => n + 1)} style={styles.retryBtn}>
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                setRetryNonce((n) => n + 1);
+              }}
+              style={styles.retryBtn}
+            >
               <Text style={styles.retryLabel}>RETRY</Text>
             </Pressable>
           </View>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, FlatList, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -13,6 +12,7 @@ import { colors, spacing } from "../lib/theme";
 import { useSentimentScores } from "../lib/useSentimentScores";
 import { pickPrompt } from "../lib/prompts";
 import { computeStreak } from "../lib/streak";
+import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
 import AppHeader from "./AppHeader";
 import TabBar, { type MainTab } from "./TabBar";
@@ -132,6 +132,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       recorderRef.current.stop().catch(() => {});
       setPhase("error");
       setStatusText("中断された、もう一度");
+      haptics.warning();
     });
     return () => sub.remove();
   }, []);
@@ -145,7 +146,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   async function applyMark(id: string, marked: boolean) {
     setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked } : l)));
     setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked } : prev));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.tapLight();
     try {
       const res = await fetch(`${API_BASE}/api/records/${id}/mark`, {
         method: "PATCH",
@@ -163,6 +164,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
 
   function openRecord() {
+    haptics.tapLight();
     if (limitReached) {
       setRecordOpen(true);
       return;
@@ -176,6 +178,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   }
 
   function closeRecord() {
+    haptics.tapLight();
     setRecordOpen(false);
     armedRef.current = false;
     pendingReleaseRef.current = false;
@@ -194,6 +197,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     if (!permission.granted) {
       setPhase("error");
       setPermissionDenied(true);
+      haptics.warning();
       return;
     }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -204,7 +208,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     setPhase("recording");
     setCarvedPost(null);
     setRecordingStartedAt(startedAtRef.current);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptics.tapMedium();
 
     if (pendingReleaseRef.current) {
       await finishRecording();
@@ -224,16 +228,19 @@ export default function RecordScreen({ session }: { session: Session }) {
     pendingReleaseRef.current = false;
     setRecordingStartedAt(null);
     await recorder.stop();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const uri = recorder.uri;
     const durationMs = Date.now() - startedAtRef.current;
     if (!uri) {
       setPhase("error");
       setStatusText("録音、失敗した");
+      haptics.error();
       return;
     }
 
+    // 録音停止 → 変換・保存中（CARVING）に入ったことを伝える軽いタップ。
+    // 実際に成功/失敗したかは後続の分岐でそれぞれ success()/error() を鳴らす。
+    haptics.tapLight();
     setPhase("carving");
     try {
       const form = new FormData();
@@ -249,12 +256,14 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (!sttRes.ok) {
         setPhase("error");
         setStatusText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
+        haptics.error();
         return;
       }
       const transcript: string = sttData.text || "";
       if (!transcript) {
         setPhase("error");
         setStatusText("無音、話せ");
+        haptics.warning();
         return;
       }
 
@@ -278,6 +287,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         } else {
           setStatusText(`保存失敗（${saveRes.status}）`);
         }
+        haptics.warning();
         return;
       }
 
@@ -286,11 +296,13 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (typeof saveData?.streak === "number") {
         setStats((prev) => mergeStats(prev, { streak: saveData.streak, todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
       }
+      haptics.success();
       fetchLogs();
     } catch {
       if (!mountedRef.current) return;
       setPhase("error");
       setStatusText("送れなかった。もう一度。");
+      haptics.error();
     }
   }
 

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GearIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 type Props = {
   title: "LOG" | "INSIGHT";
@@ -13,7 +14,10 @@ export default function AppHeader({ title, onOpenSettings }: Props) {
     <View style={styles.row}>
       <Text style={styles.title}>{title}.</Text>
       <Pressable
-        onPress={onOpenSettings}
+        onPress={() => {
+          haptics.tapLight();
+          onOpenSettings();
+        }}
         accessibilityRole="button"
         accessibilityLabel="設定"
         style={({ pressed }) => [styles.gearBtn, pressed && styles.gearBtnPressed]}

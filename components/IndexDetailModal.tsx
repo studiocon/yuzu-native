@@ -8,6 +8,7 @@ import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/
 import { dayNumberSince, formatDuration } from "../lib/stats";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { sentimentColor } from "../lib/sentimentColor";
+import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
 
 const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
@@ -85,6 +86,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
     try {
       await Clipboard.setStringAsync(payload);
       setCopied(true);
+      haptics.success();
       setTimeout(() => setCopied(false), 900);
     } catch {
       // コピー失敗は静かに無視（破壊的操作ではない）
@@ -96,7 +98,10 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
       <StatusBar hidden hideTransitionAnimation="none" />
       <SafeAreaView style={styles.safe}>
         <Pressable
-          onPress={onClose}
+          onPress={() => {
+            haptics.tapLight();
+            onClose();
+          }}
           style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
           hitSlop={12}
           accessibilityLabel="閉じる"

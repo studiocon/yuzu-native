@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { PulseIcon, WaveformIcon } from "phosphor-react-native";
 import { colors, fonts } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 export type MainTab = "log" | "insight";
 
@@ -38,13 +39,19 @@ export default function TabBar({ tab, onChange, hidden }: Props) {
         active={tab === "log"}
         label="LOG"
         icon={<WaveformIcon size={24} color={tab === "log" ? colors.ink : colors.inkMuted} weight={tab === "log" ? "fill" : "regular"} />}
-        onPress={() => onChange("log")}
+        onPress={() => {
+          if (tab !== "log") haptics.selectionChanged();
+          onChange("log");
+        }}
       />
       <TabCell
         active={tab === "insight"}
         label="INSIGHT"
         icon={<PulseIcon size={24} color={tab === "insight" ? colors.ink : colors.inkMuted} weight={tab === "insight" ? "fill" : "regular"} />}
-        onPress={() => onChange("insight")}
+        onPress={() => {
+          if (tab !== "insight") haptics.selectionChanged();
+          onChange("insight");
+        }}
       />
     </View>
   );

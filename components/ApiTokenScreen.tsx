@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 const NAME_MAX = 40;
@@ -88,8 +89,10 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
       setJustIssued(data.token);
       setNewTokenName("");
       setStep("created");
+      haptics.success();
     } catch {
       setError("発行できなかった。もう一度。");
+      haptics.error();
     } finally {
       setIssuing(false);
     }
@@ -105,8 +108,10 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
       });
       if (!res.ok) throw new Error();
       setTokens((prev) => prev.filter((t) => t.id !== id));
+      haptics.tapLight();
     } catch {
       setError("削除できなかった。もう一度。");
+      haptics.error();
     } finally {
       setRevokingId(null);
     }
@@ -116,6 +121,7 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
     if (!justIssued) return;
     await Clipboard.setStringAsync(justIssued);
     setCopied(true);
+    haptics.success();
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -126,7 +132,10 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
         <View style={styles.header}>
           <Text style={styles.headerLabel}>{step === "created" ? "ISSUED" : "CONNECT"}</Text>
           <Pressable
-            onPress={onClose}
+            onPress={() => {
+              haptics.tapLight();
+              onClose();
+            }}
             disabled={issuing}
             accessibilityRole="button"
             accessibilityLabel="閉じる"

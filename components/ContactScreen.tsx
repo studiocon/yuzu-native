@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 const SUBJECT_MAX = 200;
@@ -40,6 +41,7 @@ export default function ContactScreen({ visible, accessToken, defaultEmail, onCl
 
   async function handleSubmit() {
     if (!submittable || loading) return;
+    haptics.tapMedium();
     setLoading(true);
     setError(null);
     try {
@@ -61,12 +63,15 @@ export default function ContactScreen({ visible, accessToken, defaultEmail, onCl
         else if (code === "missing_fields") setError("タイトルと本文を埋めろ。");
         else if (res.status >= 500) setError("いま送れなかった。間を置いてもう一度。");
         else setError("送れなかった。内容を確かめてもう一度。");
+        haptics.error();
         setLoading(false);
         return;
       }
       setStep("sent");
+      haptics.success();
     } catch {
       setError("届かなかった。電波のいい所でもう一度。");
+      haptics.error();
     } finally {
       setLoading(false);
     }
@@ -79,7 +84,10 @@ export default function ContactScreen({ visible, accessToken, defaultEmail, onCl
         <View style={styles.header}>
           <Text style={styles.headerLabel}>{step === "sent" ? "SENT" : "CONTACT"}</Text>
           <Pressable
-            onPress={onClose}
+            onPress={() => {
+              haptics.tapLight();
+              onClose();
+            }}
             disabled={loading}
             accessibilityRole="button"
             accessibilityLabel="閉じる"

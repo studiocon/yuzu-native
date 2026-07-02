@@ -7,6 +7,7 @@ import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 import ApiTokenScreen from "./ApiTokenScreen";
 import ContactScreen from "./ContactScreen";
 
@@ -31,10 +32,12 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   async function handleCopyId() {
     await Clipboard.setStringAsync(session.user.id);
     setIdCopied(true);
+    haptics.success();
     setTimeout(() => setIdCopied(false), 1500);
   }
 
   function handleSignOut() {
+    haptics.tapMedium();
     onClose();
     supabase.auth.signOut();
   }
@@ -45,7 +48,10 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable
-            onPress={onClose}
+            onPress={() => {
+              haptics.tapLight();
+              onClose();
+            }}
             accessibilityRole="button"
             accessibilityLabel="戻る"
             hitSlop={12}
@@ -78,14 +84,26 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           </Section>
 
           <Section title="CONNECT">
-            <Pressable onPress={() => setTokenOpen(true)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                setTokenOpen(true);
+              }}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            >
               <Text style={styles.rowLabel}>API トークン</Text>
               <CaretRightIcon size={14} color={colors.inkMuted} />
             </Pressable>
           </Section>
 
           <Section title="SUPPORT">
-            <Pressable onPress={() => setContactOpen(true)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                setContactOpen(true);
+              }}
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            >
               <Text style={styles.rowLabel}>問い合わせ</Text>
               <CaretRightIcon size={14} color={colors.inkMuted} />
             </Pressable>
@@ -106,7 +124,10 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
               <Text style={styles.dangerLabel}>ログアウト</Text>
             </Pressable>
             <Pressable
-              onPress={() => setDeleteOpen(true)}
+              onPress={() => {
+                haptics.warning();
+                setDeleteOpen(true);
+              }}
               style={({ pressed }) => [styles.dangerRow, pressed && styles.rowPressed]}
               accessibilityRole="button"
             >
@@ -189,6 +210,7 @@ function DeleteAccountConfirm({
 
   async function handleConfirm() {
     if (!canDelete) return;
+    haptics.tapHeavy();
     setDeleting(true);
     setError(null);
     try {
@@ -202,6 +224,7 @@ function DeleteAccountConfirm({
     } catch {
       setDeleting(false);
       setError("削除できなかった。もう一度。");
+      haptics.error();
     }
   }
 
@@ -227,7 +250,14 @@ function DeleteAccountConfirm({
           />
           {error && <Text style={styles.confirmError}>{error}</Text>}
           <View style={styles.confirmActions}>
-            <Pressable onPress={onClose} disabled={deleting} style={styles.confirmCancel}>
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                onClose();
+              }}
+              disabled={deleting}
+              style={styles.confirmCancel}
+            >
               <Text style={styles.confirmCancelLabel}>やめる</Text>
             </Pressable>
             <Pressable

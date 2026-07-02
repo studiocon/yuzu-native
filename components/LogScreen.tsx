@@ -7,6 +7,7 @@ import { sentimentColor } from "../lib/sentimentColor";
 import { useCountUp } from "../lib/useCountUp";
 import { jstDateString, DAY_MS } from "../lib/period";
 import Skeleton from "./Skeleton";
+import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
 
 const SKELETON_RECORD_COUNT = 4;
@@ -55,7 +56,10 @@ const LogRow = memo(function LogRow({
   edgeColor: string | null;
   onOpenDetail: (post: Post) => void;
 }) {
-  const handlePress = useCallback(() => onOpenDetail(post), [onOpenDetail, post]);
+  const handlePress = useCallback(() => {
+    haptics.tapLight();
+    onOpenDetail(post);
+  }, [onOpenDetail, post]);
   return (
     <Pressable
       onPress={handlePress}
@@ -164,10 +168,22 @@ export default function LogScreen({
           <View style={styles.recordsSectionHead}>
             <Text style={styles.sectionTitle}>RECORDS</Text>
             <View style={styles.filterRow}>
-              <Pressable onPress={() => setFilter("all")} style={styles.filterItem}>
+              <Pressable
+                onPress={() => {
+                  if (filter !== "all") haptics.selectionChanged();
+                  setFilter("all");
+                }}
+                style={styles.filterItem}
+              >
                 <Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>ALL</Text>
               </Pressable>
-              <Pressable onPress={() => setFilter("marked")} style={styles.filterItem}>
+              <Pressable
+                onPress={() => {
+                  if (filter !== "marked") haptics.selectionChanged();
+                  setFilter("marked");
+                }}
+                style={styles.filterItem}
+              >
                 <Text style={[styles.filterLabel, filter === "marked" && styles.filterLabelActive]}>MARKED</Text>
               </Pressable>
             </View>
