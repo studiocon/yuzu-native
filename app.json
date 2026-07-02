@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "style.yuzu.mobile",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "声を記録に刻むために使う。"
+        "NSMicrophoneUsageDescription": "声を記録に刻むために使う。",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

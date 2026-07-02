@@ -116,6 +116,17 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 - [ ] バックグラウンド/割り込み（電話・通知）時の録音挙動
 - [ ] 録音FABの固定位置・スクロール中のタップ可否
 
+## TestFlight 提出前チェックリスト
+
+コード側（lint / typecheck / test）は現状クリーン。残るのはアカウント・提出作業関連のタスク:
+
+- [ ] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。無料 Apple ID では TestFlight に進めない
+- [ ] `eas init` / `eas build:configure` を実行し EAS プロジェクトをリンク（加入者が一度だけ実施）
+- [ ] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出
+- [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須）
+- [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）
+- [x] 輸出コンプライアンス（暗号化申告）: 標準的な HTTPS 通信とローカルトークン暗号化（AES, `lib/supabase.ts` の `LargeSecureStore`）のみで独自暗号を実装していないため exempt 対象。`app.json` に `ITSAppUsesNonExemptEncryption: false` を設定済み
+
 ## 既知の制約
 
 - LINE Seed JP フォント未バンドル（上記「デザイン」参照）
