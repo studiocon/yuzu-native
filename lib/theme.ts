@@ -79,11 +79,13 @@ export const easingCurves = {
 };
 
 // box-shadow は使わない（DESIGN.md §5）。階層は罫線と余白だけで作る。
-// 例外：録音アフォーダンス（FAB / マイクボタン）のみ Liquid Glass 質感を許容。
+// 例外：録音アフォーダンス（TabBar / RecordFab）のみ Liquid Glass 質感を許容。
+// yuzu-app の box-shadow（0 10px 30px rgba(...,0.10), 0 2px 8px rgba(...,0.06)）を
+// RN の単一 shadow プロパティで近似した薄めの版。TabBar/RecordFab で共有する。
 export const recordingGlowShadow = {
   shadowColor: "#1A1A30",
-  shadowOffset: { width: 0, height: 10 },
-  shadowOpacity: 0.1,
-  shadowRadius: 30,
-  elevation: 6,
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.07,
+  shadowRadius: 18,
+  elevation: 4,
 } as const;

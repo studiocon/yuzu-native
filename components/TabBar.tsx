@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { BlurView } from "expo-blur";
 import { PulseIcon, WaveformIcon } from "phosphor-react-native";
-import { colors, fonts } from "../lib/theme";
+import { colors, fonts, recordingGlowShadow } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
 export type MainTab = "log" | "insight";
@@ -33,26 +34,32 @@ export default function TabBar({ tab, onChange, hidden }: Props) {
   const translateX = slide.interpolate({ inputRange: [0, 1], outputRange: [0, CELL_WIDTH] });
 
   return (
-    <View pointerEvents={hidden ? "none" : "auto"} style={[styles.bar, hidden && styles.hidden]} accessibilityRole="tablist">
-      <Animated.View style={[styles.activePill, { transform: [{ translateX }] }]} />
-      <TabCell
-        active={tab === "log"}
-        label="LOG"
-        icon={<WaveformIcon size={24} color={tab === "log" ? colors.ink : colors.inkMuted} weight={tab === "log" ? "fill" : "regular"} />}
-        onPress={() => {
-          if (tab !== "log") haptics.selectionChanged();
-          onChange("log");
-        }}
-      />
-      <TabCell
-        active={tab === "insight"}
-        label="INSIGHT"
-        icon={<PulseIcon size={24} color={tab === "insight" ? colors.ink : colors.inkMuted} weight={tab === "insight" ? "fill" : "regular"} />}
-        onPress={() => {
-          if (tab !== "insight") haptics.selectionChanged();
-          onChange("insight");
-        }}
-      />
+    // shadow は overflow:hidden な内側の View には乗らない（RN の制約）ので、
+    // 影専用の外側 View + 角丸クリップ用の内側 View に分けている。
+    <View pointerEvents={hidden ? "none" : "auto"} style={[styles.shadowWrap, hidden && styles.hidden]}>
+      <View style={styles.bar} accessibilityRole="tablist">
+        <BlurView intensity={80} tint="systemUltraThinMaterialLight" style={StyleSheet.absoluteFill} />
+        <View style={styles.tint} pointerEvents="none" />
+        <Animated.View style={[styles.activePill, { transform: [{ translateX }] }]} />
+        <TabCell
+          active={tab === "log"}
+          label="LOG"
+          icon={<WaveformIcon size={24} color={tab === "log" ? colors.ink : colors.inkMuted} weight={tab === "log" ? "fill" : "regular"} />}
+          onPress={() => {
+            if (tab !== "log") haptics.selectionChanged();
+            onChange("log");
+          }}
+        />
+        <TabCell
+          active={tab === "insight"}
+          label="INSIGHT"
+          icon={<PulseIcon size={24} color={tab === "insight" ? colors.ink : colors.inkMuted} weight={tab === "insight" ? "fill" : "regular"} />}
+          onPress={() => {
+            if (tab !== "insight") haptics.selectionChanged();
+            onChange("insight");
+          }}
+        />
+      </View>
     </View>
   );
 }
@@ -73,22 +80,25 @@ function TabCell({ active, label, icon, onPress }: { active: boolean; label: str
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  shadowWrap: {
     width: BAR_WIDTH,
     height: BAR_HEIGHT,
     borderRadius: 9999,
+    ...recordingGlowShadow,
+  },
+  hidden: { opacity: 0 },
+  bar: {
+    flex: 1,
+    borderRadius: 9999,
     flexDirection: "row",
-    backgroundColor: "rgba(250,250,245,0.92)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.6)",
     overflow: "hidden",
-    shadowColor: "#1A1A30",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 30,
-    elevation: 6,
   },
-  hidden: { opacity: 0 },
+  tint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(250,250,245,0.35)",
+  },
   activePill: {
     position: "absolute",
     top: 6,

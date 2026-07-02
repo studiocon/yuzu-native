@@ -7,9 +7,9 @@ import Skeleton from "./Skeleton";
 import * as haptics from "../lib/haptics";
 import type { ReportMeta } from "../lib/insightTypes";
 
-const SPARK_H = 40;
+const SPARK_H = 72;
 const SPARK_ZERO = SPARK_H / 2;
-const SPARK_AMP = SPARK_H / 2 - 4;
+const SPARK_AMP = SPARK_H / 2 - 6;
 const SPARK_W = 100;
 const SKELETON_REPORT_COUNT = 3;
 
@@ -83,7 +83,10 @@ export default function ReportCard({ meta, onPress }: { meta: ReportMeta; onPres
         </View>
       )}
       {spark && (
-        <Svg width="100%" height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
+        // preserveAspectRatio を指定しないと SVG のデフォルト（xMidYMid meet）で
+        // 縦横比を保ったまま中央にレターボックスされ、横幅いっぱいに広がらない
+        // （yuzu-app の web 版は preserveAspectRatio="none" を明示している）。
+        <Svg width="100%" height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" style={styles.spark}>
           <Defs>
             <LinearGradient id={posGradId} x1="0" y1="0" x2="0" y2={SPARK_H} gradientUnits="userSpaceOnUse">
               <Stop offset="0" stopColor={SENTIMENT_POS} stopOpacity={0.62} />
@@ -135,6 +138,7 @@ const styles = StyleSheet.create({
   topics: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   chip: { backgroundColor: colors.surfaceHover, borderRadius: 2, paddingHorizontal: 8, paddingVertical: 3 },
   chipLabel: { fontSize: fontSize.xs, color: colors.inkSecondary },
+  spark: { marginTop: spacing.xs },
   pending: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
