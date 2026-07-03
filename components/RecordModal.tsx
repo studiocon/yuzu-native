@@ -205,8 +205,7 @@ function ModalBody({
         />
       ) : limitReached ? (
         <View style={styles.limitView}>
-          <Text style={styles.limitLabel}>残り</Text>
-          <Text style={styles.limitCount}>{remaining} / {maxDaily}</Text>
+          <Text style={styles.limitCount}>{maxDaily} / {maxDaily}</Text>
           <Text style={styles.limitMsg}>今日はここまで。{"\n"}明日また話せ。</Text>
         </View>
       ) : (
@@ -436,14 +435,6 @@ const styles = StyleSheet.create({
   },
 
   limitView: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20, padding: 24 },
-  limitLabel: {
-    fontFamily: fonts.displayBold,
-    fontSize: fontSize.xs,
-    color: "rgba(255,255,255,0.6)",
-    letterSpacing: fontSize.xs * letterSpacing.widest,
-    textTransform: "uppercase",
-    marginBottom: -12,
-  },
   limitCount: { fontFamily: fonts.displayBold, fontSize: fontSize.xxxl, color: "#fff", letterSpacing: fontSize.xxxl * letterSpacing.wider, opacity: 0.9 },
   limitMsg: { fontSize: fontSize.lg, lineHeight: fontSize.lg * 1.7, color: "rgba(255,255,255,0.75)", textAlign: "center" },
 

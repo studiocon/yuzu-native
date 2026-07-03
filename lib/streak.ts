@@ -1,4 +1,9 @@
 // yuzu-app の lib/streak.ts を移植（CompleteView の7日帯 + STREAK 算出）。
+// dayKey は意図的にローカルタイム（端末のタイムゾーン）で日付を割る。web と同じ設計判断で、
+// 「ユーザーの体感する1日」に streak を合わせるため（lib/period.ts の JST 固定とは別軸）。
+// サーバ側 get_streak は JST 固定なので、非 JST 端末や JST 深夜帯ではズレ得るが、
+// RecordScreen 側で Math.max(サーバ streak, このクライアント streak) を取るため実害は出ない
+// （このクライアント値は「投稿直後の即時反映」用の補助であり、正の値の低め見積りにしかならない）。
 import type { Post } from "./types";
 
 export const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;

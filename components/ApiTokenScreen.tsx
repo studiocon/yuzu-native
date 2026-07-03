@@ -51,7 +51,6 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
     setCopied(false);
     setError(null);
     loadTokens();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   async function loadTokens() {
