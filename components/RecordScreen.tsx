@@ -171,11 +171,12 @@ export default function RecordScreen({ session }: { session: Session }) {
   const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
 
   function openRecord() {
-    haptics.tapLight();
     if (limitReached) {
+      haptics.warning();
       setRecordOpen(true);
       return;
     }
+    haptics.tapLight();
     setPrompt(pickPrompt());
     setPhase("idle");
     setStatusText("");

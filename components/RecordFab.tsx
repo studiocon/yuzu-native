@@ -13,7 +13,7 @@ export default function RecordFab({ disabled, hidden, onPress }: Props) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || hidden}
+      disabled={hidden}
       accessibilityRole="button"
       accessibilityLabel="録音を開く"
       style={({ pressed }) => [styles.fab, hidden && styles.hidden, disabled && styles.disabled, pressed && styles.pressed]}
