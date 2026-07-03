@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CopyIcon, PushPinIcon, PushPinSlashIcon, XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { dayNumberSince, formatDuration } from "../lib/stats";
+import { recordWords, splitHighlights } from "../lib/highlightWords";
 import { seededHeights, voiceprintBarCount } from "../lib/voiceprint";
 import { sentimentColor } from "../lib/sentimentColor";
 import * as haptics from "../lib/haptics";
@@ -18,6 +19,8 @@ type Props = {
   firstPostAt: number | null;
   /** 感情スコア（-1.0〜1.0）。未解析なら undefined → 見出し帯の左端バー・声紋ヒーローは無色。 */
   score?: number;
+  /** INSIGHT の WORDS（全 RECORD 横断の頻出語トップ20）。本文中の出現語だけを自動ハイライトする。 */
+  topWords: Set<string>;
   onClose: () => void;
   onToggleMark: (id: string, marked: boolean) => void;
 };
@@ -46,14 +49,60 @@ function splitParagraphs(text: string): string[] {
   return parts.length > 0 ? parts : [text];
 }
 
-export default function IndexDetailModal({ post, firstPostAt, score, onClose, onToggleMark }: Props) {
+export default function IndexDetailModal({ post, firstPostAt, score, topWords, onClose, onToggleMark }: Props) {
   const [marked, setMarked] = useState(false);
   const [justMarked, setJustMarked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
     if (post) setMarked(post.marked);
   }, [post]);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (mounted) setReduceMotion(v);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const paragraphs = post ? splitParagraphs(post.text) : [];
+
+  // 開いた瞬間、段落は上から順にフェード+わずかな立ち上がりでリビールする（DESIGN.md v2.4）。
+  const paraAnims = useMemo(
+    () => paragraphs.map(() => new Animated.Value(reduceMotion ? 1 : 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [post?.id],
+  );
+  useEffect(() => {
+    if (!post) return;
+    if (reduceMotion) {
+      paraAnims.forEach((v) => v.setValue(1));
+      return;
+    }
+    paraAnims.forEach((v) => v.setValue(0));
+    Animated.stagger(
+      70,
+      paraAnims.map((v) =>
+        Animated.timing(v, { toValue: 1, duration: 420, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      ),
+    ).start();
+  }, [post, paraAnims, reduceMotion]);
+
+  // 感情カラー声紋ヒーローは、開いた瞬間に下から立ち上がる。
+  const voiceGrow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!post) return;
+    if (reduceMotion) {
+      voiceGrow.setValue(1);
+      return;
+    }
+    voiceGrow.setValue(0);
+    Animated.timing(voiceGrow, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [post, reduceMotion, voiceGrow]);
 
   if (!post) return null;
 
@@ -65,7 +114,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
 
   const barCount = voiceprintBarCount(post.durationMs);
   const bars = barCount === null ? null : seededHeights(post.id, barCount);
-  const paragraphs = splitParagraphs(post.text);
+  const hitWords = recordWords(post.text, topWords);
   const moodColor = sentimentColor(score);
 
   function fireMark() {
@@ -117,15 +166,25 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
 
             {bars && (
               <View style={styles.voiceprint}>
-                {bars.map((h, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.voiceprintBar,
-                      { height: Math.max(1, Math.round(h * 80)), backgroundColor: moodColor ?? "rgba(255,255,255,0.4)" },
-                    ]}
-                  />
-                ))}
+                {bars.map((h, i) => {
+                  const barHeight = Math.max(1, Math.round(h * 80));
+                  return (
+                    <Animated.View
+                      key={i}
+                      style={[
+                        styles.voiceprintBar,
+                        {
+                          height: barHeight,
+                          backgroundColor: moodColor ?? "rgba(255,255,255,0.4)",
+                          transform: [
+                            { translateY: voiceGrow.interpolate({ inputRange: [0, 1], outputRange: [barHeight / 2, 0] }) },
+                            { scaleY: voiceGrow },
+                          ],
+                        },
+                      ]}
+                    />
+                  );
+                })}
               </View>
             )}
 
@@ -157,7 +216,24 @@ export default function IndexDetailModal({ post, firstPostAt, score, onClose, on
 
           <View style={styles.textBlock}>
             {paragraphs.map((para, i) => (
-              <Text key={i} style={styles.para}>{para}</Text>
+              <Animated.Text
+                key={i}
+                style={[
+                  styles.para,
+                  {
+                    opacity: paraAnims[i],
+                    transform: [{ translateY: paraAnims[i].interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+                  },
+                ]}
+              >
+                {splitHighlights(para, hitWords).map((seg, j) =>
+                  seg.mark ? (
+                    <Text key={j} style={styles.paraMark}>{seg.text}</Text>
+                  ) : (
+                    seg.text
+                  ),
+                )}
+              </Animated.Text>
             ))}
           </View>
 
@@ -252,6 +328,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     lineHeight: fontSize.lg * 1.85,
     color: "rgba(255,255,255,0.92)",
+  },
+  paraMark: {
+    color: colors.yuzuYellow,
+    textDecorationLine: "underline",
+    textDecorationColor: colors.yuzuYellow,
   },
   actions: { flexDirection: "row", gap: spacing.md },
   actionBtn: {

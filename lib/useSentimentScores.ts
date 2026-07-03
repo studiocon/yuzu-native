@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./apiFetch";
 import { loadSentimentCache, saveSentimentCache } from "./sentimentCache";
 import type { Post } from "./types";
 
@@ -15,7 +16,6 @@ type ScorablePost = Pick<Post, "id" | "text" | "createdAt">;
 export function useSentimentScores(
   posts: ScorablePost[],
   apiBase: string,
-  accessToken: string,
 ): Record<string, number> {
   const [scores, setScores] = useState<Record<string, number>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -45,11 +45,10 @@ export function useSentimentScores(
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${apiBase}/api/analyze-sentiment`, {
+        const res = await apiFetch(`${apiBase}/api/analyze-sentiment`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             posts: unresolved.map((p) => ({ id: p.id, text: p.text, createdAt: p.createdAt })),
@@ -73,7 +72,7 @@ export function useSentimentScores(
     };
     // posts は毎回新しい配列参照になるが、内容（未解析分のみ）に基づいて早期returnするので問題ない
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, posts, apiBase, accessToken]);
+  }, [hydrated, posts, apiBase]);
 
   return scores;
 }

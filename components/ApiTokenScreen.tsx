@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { XIcon } from "phosphor-react-native";
+import { apiFetch } from "../lib/apiFetch";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
@@ -27,12 +28,11 @@ function formatDate(ms: number): string {
 
 type Props = {
   visible: boolean;
-  accessToken: string;
   onClose: () => void;
 };
 
 // yuzu-app の ApiTokenModal.tsx を移植（CONNECT 設定内・MCP 用パーソナルアクセストークン発行）。
-export default function ApiTokenScreen({ visible, accessToken, onClose }: Props) {
+export default function ApiTokenScreen({ visible, onClose }: Props) {
   const [step, setStep] = useState<Step>("list");
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -57,9 +57,7 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
   async function loadTokens() {
     setLoadingList(true);
     try {
-      const res = await fetch(`${API_BASE}/api/account/tokens`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await apiFetch(`${API_BASE}/api/account/tokens`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setTokens(Array.isArray(data.tokens) ? data.tokens : []);
@@ -75,9 +73,9 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
     setIssuing(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/account/tokens`, {
+      const res = await apiFetch(`${API_BASE}/api/account/tokens`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newTokenName.trim() || undefined }),
       });
       if (!res.ok) throw new Error();
@@ -102,9 +100,8 @@ export default function ApiTokenScreen({ visible, accessToken, onClose }: Props)
     setRevokingId(id);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/account/tokens?id=${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`${API_BASE}/api/account/tokens?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) throw new Error();
       setTokens((prev) => prev.filter((t) => t.id !== id));

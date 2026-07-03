@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Dimensions, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import type { AudioRecorder } from "expo-audio";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { MicrophoneIcon, MicrophoneSlashIcon, XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing } from "../lib/theme";
 import type { WeekDay } from "../lib/streak";
@@ -16,6 +16,12 @@ import Waveform from "./Waveform";
 export const MAX_RECORD_MS = 1 * 60 * 1000;
 const RING = 54;
 const CIRC = 2 * Math.PI * RING;
+
+// yuzu-app の SpeakView.tsx の沈黙ナッジ(SILENCE_NUDGE_MS)を移植。
+// Web は AnalyserNode の time-domain 振幅で無音判定するが、native は expo-audio の
+// metering(dB) しか取れないため、Waveform.tsx と同じ (db+60)/55 正規化を無音判定に流用する。
+const SILENCE_NUDGE_MS = 5000;
+const SILENCE_LEVEL_THRESHOLD = 0.15;
 
 export type ModalPhase = "idle" | "recording" | "carving" | "carved" | "error";
 
@@ -55,9 +61,28 @@ export default function RecordModal(props: Props) {
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={props.onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
       <View style={styles.root}>
+        <RecordModalBackground />
         <ModalBody {...props} />
       </View>
     </Modal>
+  );
+}
+
+// yuzu-app の .record-modal 背景（linear-gradient(160deg, #F5D84A 0%, #E8A020 60%, #D4880A 100%)）を移植。
+// フェーズによる切り替えではなく常時この斜めグラデーション（CSSの160degをSVGのobjectBoundingBox座標に変換）。
+function RecordModalBackground() {
+  const { width, height } = Dimensions.get("window");
+  return (
+    <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <LinearGradient id="recordBg" x1="0.33" y1="0.03" x2="0.67" y2="0.97">
+          <Stop offset="0" stopColor="#F5D84A" />
+          <Stop offset="0.6" stopColor="#E8A020" />
+          <Stop offset="1" stopColor="#D4880A" />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={width} height={height} fill="url(#recordBg)" />
+    </Svg>
   );
 }
 
@@ -95,6 +120,10 @@ function ModalBody({
     return () => clearTimeout(t);
   }, [isIdleHero]);
 
+  // 録音中、連続無音が SILENCE_NUDGE_MS を超えたらプロンプトを再表示する（話し出したら消える）。
+  const [recordingNudge, setRecordingNudge] = useState(false);
+  const silenceStartRef = useRef<number | null>(null);
+
   // カウントダウン表示とリングの進捗だけがこの経過時間を必要とする。以前は RecordScreen が
   // 200ms ごとに state 更新し、そのたびに LOG/INSIGHT タブを含む画面全体を再レンダーしていた。
   // ここに閉じ込めることで、再レンダー範囲を「モーダルが開いている間だけ」に限定する。
@@ -102,14 +131,48 @@ function ModalBody({
   useEffect(() => {
     if (!isRecording || recordingStartedAt === null) {
       setRecordingElapsed(0);
+      setRecordingNudge(false);
+      silenceStartRef.current = null;
       return;
     }
     setRecordingElapsed(Date.now() - recordingStartedAt);
     const id = setInterval(() => {
       setRecordingElapsed(Date.now() - recordingStartedAt);
+
+      let level = 0;
+      try {
+        const status = recorder.getStatus();
+        const db = typeof status.metering === "number" ? status.metering : -60;
+        level = Math.max(0, Math.min(1, (db + 60) / 55));
+      } catch {
+        level = 0;
+      }
+      if (level < SILENCE_LEVEL_THRESHOLD) {
+        if (silenceStartRef.current === null) silenceStartRef.current = Date.now();
+        else if (Date.now() - silenceStartRef.current >= SILENCE_NUDGE_MS) setRecordingNudge(true);
+      } else {
+        silenceStartRef.current = null;
+        setRecordingNudge(false);
+      }
     }, 200);
     return () => clearInterval(id);
-  }, [isRecording, recordingStartedAt]);
+  }, [isRecording, recordingStartedAt, recorder]);
+
+  const promptVisible = (isIdleHero && promptShown) || (isRecording && recordingNudge);
+  const promptOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (promptVisible) {
+      promptOpacity.setValue(0);
+      Animated.timing(promptOpacity, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      promptOpacity.setValue(0);
+    }
+  }, [promptVisible, promptOpacity]);
 
   const canClose = phase === "idle" || phase === "carved" || phase === "error";
   const remainingMs = Math.max(0, MAX_RECORD_MS - recordingElapsed);
@@ -157,8 +220,8 @@ function ModalBody({
           </View>
 
           <View style={[styles.bottom, { paddingBottom: 80 + insets.bottom }]}>
-            {(isIdleHero || isRecording) && promptShown && (
-              <Text style={styles.promptText}>{prompt}</Text>
+            {(isIdleHero || isRecording) && promptVisible && (
+              <Animated.Text style={[styles.promptText, { opacity: promptOpacity }]}>{prompt}</Animated.Text>
             )}
             {isIdleHero && remaining < 3 && <Text style={styles.remaining}>{remaining} LEFT</Text>}
 
@@ -316,7 +379,7 @@ function CompleteView({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.yuzuZest },
+  root: { flex: 1, backgroundColor: colors.yuzuYellow },
   closeBtn: {
     position: "absolute",
     left: 16,

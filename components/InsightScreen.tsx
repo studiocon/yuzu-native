@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { apiFetch } from "../lib/apiFetch";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
 import { computeSentimentSeries } from "../lib/sentimentSeries";
@@ -22,10 +23,10 @@ const REPORTS_POLL_TIMEOUT_MS = 2 * 60 * 1000;
 type Props = {
   posts: Post[];
   scores: Record<string, number>;
-  accessToken: string;
+  words: { data: WordFreq[] | null; error: string | null };
 };
 
-export default function InsightScreen({ posts, scores, accessToken }: Props) {
+export default function InsightScreen({ posts, scores, words }: Props) {
   const [openReport, setOpenReport] = useState<string | null>(null);
 
   const emotionData = useMemo(() => {
@@ -34,19 +35,12 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
     return computeSentimentSeries(filtered, scores);
   }, [posts, scores]);
 
-  const words = useApiGet<WordFreq[]>(
-    `${API_BASE}/api/insights/words`,
-    accessToken,
-    (r) => (Array.isArray(r.words) ? (r.words as WordFreq[]) : []),
-  );
   const heatmap = useApiGet<HeatmapCell[]>(
     `${API_BASE}/api/insights/heatmap`,
-    accessToken,
     (r) => (Array.isArray(r.cells) ? (r.cells as HeatmapCell[]) : []),
   );
   const themes = useApiGet<{ themes: Theme[]; notEnough: boolean }>(
     `${API_BASE}/api/insights/themes`,
-    accessToken,
     (r) => ({ themes: Array.isArray(r.themes) ? (r.themes as Theme[]) : [], notEnough: r.notEnough === true }),
   );
   // REPORTS 一覧は独自管理（useApiGet だとポーリングの度に data が null に戻ってスケルトンへ
@@ -55,9 +49,7 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
   const [reportsError, setReportsError] = useState<string | null>(null);
   const fetchReports = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/reports?scope=all`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await apiFetch(`${API_BASE}/api/reports?scope=all`);
       if (!res.ok) {
         setReportsError("失敗、話せ");
         return;
@@ -68,7 +60,7 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
     } catch {
       setReportsError("失敗、話せ");
     }
-  }, [accessToken]);
+  }, []);
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
@@ -88,13 +80,13 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
     if (pending.length === 0) return;
     pregenFiredRef.current = true;
     for (const m of pending) {
-      fetch(`${API_BASE}/api/reports/${encodeURIComponent(m.periodKey)}`, {
+      apiFetch(`${API_BASE}/api/reports/${encodeURIComponent(m.periodKey)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scores }),
       }).catch(() => {});
     }
-  }, [reportsData, accessToken, scores]);
+  }, [reportsData, scores]);
 
   // 生成待ちが残っている間は、カードが完了状態に切り替わるのを裏で定期的に確認する。
   // タブを離れずに待てるように（＝バッジ表示のまま自然に更新される）。上限を超えたら止める。
@@ -167,7 +159,6 @@ export default function InsightScreen({ posts, scores, accessToken }: Props) {
 
       <ReportDetailModal
         periodKey={openReport}
-        accessToken={accessToken}
         scores={scores}
         onClose={() => setOpenReport(null)}
       />

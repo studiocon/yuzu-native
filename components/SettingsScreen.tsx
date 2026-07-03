@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
 import type { Session } from "@supabase/supabase-js";
+import { apiFetch } from "../lib/apiFetch";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
@@ -141,7 +142,6 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
 
         <DeleteAccountConfirm
           visible={deleteOpen}
-          accessToken={session.access_token}
           onClose={() => setDeleteOpen(false)}
           onDeleted={() => {
             setDeleteOpen(false);
@@ -149,10 +149,9 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           }}
         />
 
-        <ApiTokenScreen visible={tokenOpen} accessToken={session.access_token} onClose={() => setTokenOpen(false)} />
+        <ApiTokenScreen visible={tokenOpen} onClose={() => setTokenOpen(false)} />
         <ContactScreen
           visible={contactOpen}
-          accessToken={session.access_token}
           defaultEmail={session.user.email ?? ""}
           onClose={() => setContactOpen(false)}
         />
@@ -194,12 +193,10 @@ function Row({
 
 function DeleteAccountConfirm({
   visible,
-  accessToken,
   onClose,
   onDeleted,
 }: {
   visible: boolean;
-  accessToken: string;
   onClose: () => void;
   onDeleted: () => void;
 }) {
@@ -214,10 +211,7 @@ function DeleteAccountConfirm({
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/account`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await apiFetch(`${API_BASE}/api/account`, { method: "DELETE" });
       if (!res.ok) throw new Error("delete failed");
       await supabase.auth.signOut();
       onDeleted();

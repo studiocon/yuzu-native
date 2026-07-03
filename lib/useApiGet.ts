@@ -1,9 +1,9 @@
 // INSIGHT セクション共通の認証付き GET フェッチ。silent fail させない（失敗は error 文字列で返す）。
 import { useEffect, useState } from "react";
+import { apiFetch } from "./apiFetch";
 
 export function useApiGet<T>(
   url: string,
-  accessToken: string,
   parse: (payload: Record<string, unknown>) => T,
   errorMessage = "失敗、話せ",
 ): { data: T | null; error: string | null } {
@@ -16,7 +16,7 @@ export function useApiGet<T>(
     setError(null);
     (async () => {
       try {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        const res = await apiFetch(url);
         if (!res.ok) {
           if (!cancelled) setError(errorMessage);
           return;
@@ -32,7 +32,7 @@ export function useApiGet<T>(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, accessToken]);
+  }, [url]);
 
   return { data, error };
 }

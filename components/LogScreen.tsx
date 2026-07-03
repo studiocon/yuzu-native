@@ -173,7 +173,7 @@ export default function LogScreen({
                   if (filter !== "all") haptics.selectionChanged();
                   setFilter("all");
                 }}
-                style={styles.filterItem}
+                style={[styles.filterItem, filter === "all" && styles.filterItemActive]}
               >
                 <Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>ALL</Text>
               </Pressable>
@@ -182,7 +182,7 @@ export default function LogScreen({
                   if (filter !== "marked") haptics.selectionChanged();
                   setFilter("marked");
                 }}
-                style={styles.filterItem}
+                style={[styles.filterItem, filter === "marked" && styles.filterItemActive]}
               >
                 <Text style={[styles.filterLabel, filter === "marked" && styles.filterLabelActive]}>MARKED</Text>
               </Pressable>
@@ -275,23 +275,23 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   filterRow: { flexDirection: "row", gap: spacing.sm },
-  filterItem: { paddingVertical: 6, paddingHorizontal: 10 },
+  filterItem: { paddingVertical: 6, paddingHorizontal: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  filterItemActive: { borderBottomColor: colors.yuzuZest },
   filterLabel: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
     color: colors.inkMuted,
     letterSpacing: fontSize.xs * letterSpacing.widest,
   },
-  filterLabelActive: { color: colors.ink, textDecorationLine: "underline", textDecorationColor: colors.yuzuZest },
+  filterLabelActive: { color: colors.ink },
   empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.md },
   skeletonList: { gap: spacing.md, paddingTop: spacing.sm },
   recordSkeletonCard: {
-    gap: 10,
-    padding: spacing.lg,
-    backgroundColor: colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: 4,
+    gap: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.sm,
   },
   skeletonRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
   divider: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingTop: spacing.md },

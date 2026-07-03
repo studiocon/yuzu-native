@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
+import { apiFetch } from "../lib/apiFetch";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { periodLabel } from "../lib/period";
 import * as haptics from "../lib/haptics";
@@ -17,7 +18,6 @@ type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed"
 
 type Props = {
   periodKey: string | null;
-  accessToken: string;
   scores: Record<string, number>;
   onClose: () => void;
 };
@@ -27,7 +27,7 @@ type Props = {
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_ATTEMPTS = 30; // 3s * 30 = 90s
 
-export default function ReportDetailModal({ periodKey, accessToken, scores, onClose }: Props) {
+export default function ReportDetailModal({ periodKey, scores, onClose }: Props) {
   const [status, setStatus] = useState<Status>("loading");
   const [payload, setPayload] = useState<ReportPayload | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -41,9 +41,7 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     async function tryFetchReport(): Promise<FetchResult> {
-      const getRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey!)}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const getRes = await apiFetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey!)}`);
       if (getRes.status === 422) return "in_progress";
       if (getRes.status === 202) return "pending";
       if (getRes.ok) {
@@ -70,9 +68,9 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
 
         if (first === "not_generated" || first === "failed") {
           // 未生成、または前回失敗 → POST で（再）起動（202 を即返すだけなので待たない）
-          const postRes = await fetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
+          const postRes = await apiFetch(`${API_BASE}/api/reports/${encodeURIComponent(periodKey)}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ scores }),
           });
           if (cancelled) return;
@@ -113,7 +111,7 @@ export default function ReportDetailModal({ periodKey, accessToken, scores, onCl
     };
     // scores はキャプチャ依存（生成トリガーは periodKey/retryNonce のみ。新規スコア到着での再生成は不要）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodKey, accessToken, retryNonce]);
+  }, [periodKey, retryNonce]);
 
   if (!periodKey) return null;
 

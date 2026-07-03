@@ -8,12 +8,15 @@ import {
   useAudioRecorder,
 } from "expo-audio";
 import type { Session } from "@supabase/supabase-js";
+import { apiFetch } from "../lib/apiFetch";
 import { colors, spacing } from "../lib/theme";
+import { useApiGet } from "../lib/useApiGet";
 import { useSentimentScores } from "../lib/useSentimentScores";
 import { pickPrompt } from "../lib/prompts";
 import { computeStreak } from "../lib/streak";
 import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
+import type { WordFreq } from "../lib/insightTypes";
 import AppHeader from "./AppHeader";
 import TabBar, { type MainTab } from "./TabBar";
 import RecordFab from "./RecordFab";
@@ -72,7 +75,13 @@ export default function RecordScreen({ session }: { session: Session }) {
   const listRef = useRef<FlatList<LogRowItem>>(null);
   const insets = useSafeAreaInsets();
 
-  const scores = useSentimentScores(logs, API_BASE, session.access_token);
+  const scores = useSentimentScores(logs, API_BASE);
+  // WORDS 自動ハイライト用の頻出語（INSIGHT タブ未訪問でも LOG から詳細を開けるよう、ここで取得しておく）。
+  const words = useApiGet<WordFreq[]>(
+    `${API_BASE}/api/insights/words`,
+    (r) => (Array.isArray(r.words) ? (r.words as WordFreq[]) : []),
+  );
+  const topWords = useMemo(() => new Set((words.data ?? []).map((w) => w.word)), [words.data]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -83,9 +92,7 @@ export default function RecordScreen({ session }: { session: Session }) {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/records?limit=20`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const res = await apiFetch(`${API_BASE}/api/records?limit=20`);
       if (!res.ok || !mountedRef.current) return;
       const data = await res.json();
       if (!mountedRef.current) return;
@@ -116,7 +123,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     } finally {
       if (mountedRef.current) setLogsLoaded(true);
     }
-  }, [session.access_token]);
+  }, []);
 
   useEffect(() => {
     fetchLogs();
@@ -148,9 +155,9 @@ export default function RecordScreen({ session }: { session: Session }) {
     setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked } : prev));
     haptics.tapLight();
     try {
-      const res = await fetch(`${API_BASE}/api/records/${id}/mark`, {
+      const res = await apiFetch(`${API_BASE}/api/records/${id}/mark`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ marked }),
       });
       if (!res.ok) throw new Error("mark failed");
@@ -246,9 +253,8 @@ export default function RecordScreen({ session }: { session: Session }) {
       const form = new FormData();
       form.append("audio", { uri, name: "recording.m4a", type: "audio/m4a" } as unknown as Blob);
 
-      const sttRes = await fetch(`${API_BASE}/api/transcribe`, {
+      const sttRes = await apiFetch(`${API_BASE}/api/transcribe`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
         body: form,
       });
       const sttData = await sttRes.json();
@@ -267,9 +273,9 @@ export default function RecordScreen({ session }: { session: Session }) {
         return;
       }
 
-      const saveRes = await fetch(`${API_BASE}/api/records`, {
+      const saveRes = await apiFetch(`${API_BASE}/api/records`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: transcript, durationMs }),
       });
       const saveData = await saveRes.json();
@@ -333,7 +339,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           listFooterPadding={96 + insets.bottom + spacing.xl * 2}
         />
       ) : (
-        <InsightScreen posts={logs} scores={scores} accessToken={session.access_token} />
+        <InsightScreen posts={logs} scores={scores} words={words} />
       )}
 
       <View pointerEvents="box-none" style={[styles.chromeRow, { bottom: insets.bottom + spacing.md, left: insets.left + spacing.lg, right: insets.right + spacing.lg }]}>
@@ -365,6 +371,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         post={selectedPost}
         firstPostAt={firstPostAt}
         score={selectedPost ? scores[selectedPost.id] : undefined}
+        topWords={topWords}
         onClose={() => setSelectedPost(null)}
         onToggleMark={applyMark}
       />

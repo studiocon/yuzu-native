@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
+import { apiFetch } from "../lib/apiFetch";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
@@ -14,13 +15,12 @@ type Step = "input" | "sent";
 
 type Props = {
   visible: boolean;
-  accessToken: string;
   defaultEmail: string;
   onClose: () => void;
 };
 
 // yuzu-app の ContactModal.tsx を移植（設定 > SUPPORT > 問い合わせ）。
-export default function ContactScreen({ visible, accessToken, defaultEmail, onClose }: Props) {
+export default function ContactScreen({ visible, defaultEmail, onClose }: Props) {
   const [step, setStep] = useState<Step>("input");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -45,9 +45,9 @@ export default function ContactScreen({ visible, accessToken, defaultEmail, onCl
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/inquiries`, {
+      const res = await apiFetch(`${API_BASE}/api/inquiries`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject: subject.trim(), body: body.trim(), email: email.trim() || undefined }),
       });
       if (!res.ok) {
