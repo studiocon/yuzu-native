@@ -48,7 +48,8 @@
     "build:ios:production": "eas build --platform ios --profile production",
     "submit:ios": "eas submit --platform ios --profile production",
     "test": "jest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "private": true
 }

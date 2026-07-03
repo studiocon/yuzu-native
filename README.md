@@ -116,15 +116,18 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 - [ ] バックグラウンド/割り込み（電話・通知）時の録音挙動
 - [ ] 録音FABの固定位置・スクロール中のタップ可否
 
+トークンリフレッシュ絡みの 401（長時間バックグラウンド後にAPIが401で落ちる問題）は解消済み: `lib/apiFetch.ts` が呼び出し直前に毎回 `getSession()` を通し、期限切れなら Supabase SDK 内部のリフレッシュを経由してから叩くため、実機検証でも stale session による 401 リスクは無い。
+
 ## TestFlight 提出前チェックリスト
 
-コード側（lint / typecheck / test）は現状クリーン。残るのはアカウント・提出作業関連のタスク:
+コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。残るのはアカウント・提出作業・インフラ側のタスク:
 
 - [ ] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。無料 Apple ID では TestFlight に進めない
 - [ ] `eas init` / `eas build:configure` を実行し EAS プロジェクトをリンク（加入者が一度だけ実施）
 - [ ] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出
 - [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須）
 - [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）
+- [ ] yuzu-app リポジトリの Supabase マイグレーションを本番ダッシュボードに適用: `20260702075418_report_jobs.sql` と `20260702130000_anon_stt_rate_limit.sql`（未適用。本体側の機能に必要なため提出前に反映すること）
 - [x] 輸出コンプライアンス（暗号化申告）: 標準的な HTTPS 通信とローカルトークン暗号化（AES, `lib/supabase.ts` の `LargeSecureStore`）のみで独自暗号を実装していないため exempt 対象。`app.json` に `ITSAppUsesNonExemptEncryption: false` を設定済み
 
 ## 既知の制約
@@ -134,3 +137,4 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 - `eas.json` は用意済みだが EAS プロジェクト自体は未リンク（`eas init` 未実施。Apple Developer Program 加入者が実施する想定）
 - Android 実機での検証記録なし（手順は iOS 前提のみ）
 - テストは `lib/` の純粋関数のみ。`components/` の画面コンポーネントは未カバー（RN実機/シミュレータでのE2E的な検証が必要なため）
+- 設定画面の LEGAL / ALERT / プラン の各行は審査対策として一時的に非表示（実ページ未公開のため）。LEGAL セクションはページ公開後に復活予定（[components/SettingsScreen.tsx](components/SettingsScreen.tsx)）
