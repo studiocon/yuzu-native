@@ -9,6 +9,7 @@ import {
 } from "expo-audio";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
+import { API_BASE } from "../lib/config";
 import { colors, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
 import { useSentimentScores } from "../lib/useSentimentScores";
@@ -25,8 +26,6 @@ import InsightScreen from "./InsightScreen";
 import SettingsScreen from "./SettingsScreen";
 import IndexDetailModal from "./IndexDetailModal";
 import RecordModal, { type ModalPhase } from "./RecordModal";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Stats = {
   streak: number;

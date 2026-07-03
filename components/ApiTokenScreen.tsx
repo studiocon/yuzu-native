@@ -5,10 +5,10 @@ import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { XIcon } from "phosphor-react-native";
 import { apiFetch } from "../lib/apiFetch";
+import { API_BASE } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 const NAME_MAX = 40;
 
 type TokenItem = {

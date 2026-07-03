@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { apiFetch } from "../lib/apiFetch";
+import { API_BASE } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
 import { computeSentimentSeries } from "../lib/sentimentSeries";
@@ -14,7 +15,6 @@ import ReportDetailModal from "./ReportDetailModal";
 import type { Post } from "../lib/types";
 import type { HeatmapCell, ReportMeta, Theme, WordFreq } from "../lib/insightTypes";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 const SENTIMENT_WINDOW_MS = 30 * DAY_MS;
 // REPORTS の生成待ちポーリング間隔・上限（サーバの非同期生成が終わるのを黙って待つ）。
 const REPORTS_POLL_INTERVAL_MS = 5000;

@@ -4,16 +4,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
+import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
+import { API_BASE } from "../lib/config";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 import ApiTokenScreen from "./ApiTokenScreen";
 import ContactScreen from "./ContactScreen";
-
-const VERSION = "1.0.0";
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Props = {
   visible: boolean;
@@ -65,15 +64,6 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={styles.body}>
-          <Section title="YOU">
-            <Row label="プラン" value="フリープラン" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
-          </Section>
-
-          <Section title="ALERT">
-            <Row label="メール通知" value="―" disabled />
-            <Row label="プッシュ通知" value="―" disabled />
-          </Section>
-
           <Section title="ACCOUNT">
             <Row label="メールアドレス" value={email} />
             <Pressable onPress={handleCopyId} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
@@ -110,10 +100,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
             </Pressable>
           </Section>
 
-          <Section title="LEGAL">
-            <Row label="利用規約" value="" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
-            <Row label="プライバシーポリシー" value="" disabled trailing={<CaretRightIcon size={14} color={colors.inkMuted} />} />
-          </Section>
+          {/* LEGAL セクションはページ公開後に復活させる（審査対策で一時削除） */}
 
           <Section title="">
             <Pressable
@@ -138,7 +125,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           </Section>
         </ScrollView>
 
-        <Text style={styles.version}>VERSION {VERSION}</Text>
+        <Text style={styles.version}>VERSION {Constants.expoConfig?.version ?? "1.0.0"}</Text>
 
         <DeleteAccountConfirm
           visible={deleteOpen}
@@ -169,23 +156,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({
-  label,
-  value,
-  disabled,
-  trailing,
-}: {
-  label: string;
-  value: string;
-  disabled?: boolean;
-  trailing?: React.ReactNode;
-}) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <View style={[styles.row, disabled && styles.rowDisabled]}>
+    <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowTrailing}>
         {value !== "" && <Text style={styles.rowValue}>{value}</Text>}
-        {trailing}
       </View>
     </View>
   );
@@ -305,7 +281,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
   },
   rowPressed: { backgroundColor: colors.surfaceHover },
-  rowDisabled: { opacity: 0.5 },
   rowLabel: { fontSize: fontSize.base, color: colors.ink },
   rowTrailing: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   rowValue: { fontSize: fontSize.sm, color: colors.inkMuted },

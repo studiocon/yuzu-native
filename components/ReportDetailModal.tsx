@@ -4,14 +4,13 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { apiFetch } from "../lib/apiFetch";
+import { API_BASE } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { periodLabel } from "../lib/period";
 import * as haptics from "../lib/haptics";
 import EmotionChart from "./EmotionChart";
 import Skeleton from "./Skeleton";
 import type { ReportPayload } from "../lib/insightTypes";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? "https://app.yuzu.style";
 
 type Status = "loading" | "ok" | "no_posts" | "in_progress" | "error";
 type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed" | "error";
