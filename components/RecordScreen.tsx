@@ -64,7 +64,15 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [refreshing, setRefreshing] = useState(false);
   const [prompt, setPrompt] = useState(() => pickPrompt());
 
-  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  // android.audioSource: 'voice_communication' で OS レベルの AGC/エコーキャンセルを有効化。
+  // 未指定だと小声の入力がそのまま低レベルでエンコードされ、ElevenLabs 側の音声検出（VAD）で
+  // 無音判定される事故につながる（yuzu-app 側の同事象を getUserMedia の autoGainControl で修正、
+  // ネイティブ側は expo-audio の Android audioSource で同等の効果を狙う）。
+  const recorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY,
+    android: { ...RecordingPresets.HIGH_QUALITY.android, audioSource: "voice_communication" },
+    isMeteringEnabled: true,
+  });
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
   const startedAtRef = useRef(0);
