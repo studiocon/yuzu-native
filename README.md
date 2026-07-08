@@ -84,25 +84,19 @@ npm run ios
 2. iPhone を USB 接続 → デバイス選択 → ▶ 実行
 3. iPhone 側「設定 → 一般 → VPN とデバイス管理」で証明書を信頼
 
-無料 Apple ID（Personal Team）の場合、7日ごとに再インストールが必要。TestFlight に進むには Apple Developer Program（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）への加入が必須。
+無料 Apple ID（Personal Team）の場合、7日ごとに再インストールが必要。TestFlight に進むには Apple Developer Program（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）への加入が必須。→ **加入審査通過済み**。
 
 ### EAS Build（TestFlight 提出用）
 
-`eas.json` に `development` / `preview` / `production` の3プロファイルを用意済み。ただしこのリポジトリはまだ **EAS プロジェクトに未リンク**（`eas init` 未実施）。Apple Developer Program 加入者が以下を一度だけ実行する必要がある:
+`eas.json` に `development` / `preview` / `production` の3プロファイルを用意済み。EAS プロジェクトは `kyotakonnos-team` 配下にリンク済み（`app.json` の `expo.extra.eas.projectId`、コミット `11fd5dd`）。ビルド・提出は以下（Apple Developer Program 加入者本人が Expo/Apple の資格情報でログインして実行する）:
 
 ```bash
-npx eas login          # Expo アカウントでログイン
-npx eas init            # app.json に expo.extra.eas.projectId が書き込まれる
-npx eas build:configure # iOS の Bundle Identifier / 証明書設定を対話的に行う
-```
-
-リンク後は：
-
-```bash
-npm run build:ios:preview     # 社内配布用（Ad Hoc / internal distribution）
-npm run build:ios:production  # ストア提出用
+npx eas login                  # Expo アカウントでログイン（初回のみ）
+npm run build:ios:production   # ストア提出用ビルド。初回は Apple 証明書/プロビジョニングを対話的に設定
 npm run submit:ios             # ビルド済みアーカイブを App Store Connect に提出
 ```
+
+社内配布だけで十分なら `npm run build:ios:preview`（Ad Hoc / internal distribution）でも良い。
 
 ## 実機検証待ち（#64 チェックリスト）
 
@@ -122,8 +116,8 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。残るのはアカウント・提出作業・インフラ側のタスク:
 
-- [ ] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。無料 Apple ID では TestFlight に進めない
-- [ ] `eas init` / `eas build:configure` を実行し EAS プロジェクトをリンク（加入者が一度だけ実施）
+- [x] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。加入審査通過済み
+- [x] EAS プロジェクトをリンク（`kyotakonnos-team` 配下、`app.json` の `expo.extra.eas.projectId`）
 - [ ] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出
 - [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須）
 - [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）
@@ -134,7 +128,6 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 
 - LINE Seed JP フォント未バンドル（上記「デザイン」参照）
 - 感情スコアはDBに永続化されない（yuzu-app と同じ設計。端末を変えると再解析が必要）
-- `eas.json` は用意済みだが EAS プロジェクト自体は未リンク（`eas init` 未実施。Apple Developer Program 加入者が実施する想定）
 - Android 実機での検証記録なし（手順は iOS 前提のみ）
 - テストは `lib/` の純粋関数のみ。`components/` の画面コンポーネントは未カバー（RN実機/シミュレータでのE2E的な検証が必要なため）
 - 設定画面の LEGAL / ALERT / プラン の各行は審査対策として一時的に非表示（実ページ未公開のため）。LEGAL セクションはページ公開後に復活予定（[components/SettingsScreen.tsx](components/SettingsScreen.tsx)）
