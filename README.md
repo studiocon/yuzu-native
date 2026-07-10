@@ -124,6 +124,7 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 
 - [ ] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。無料 Apple ID では TestFlight に進めない
 - [ ] `eas init` / `eas build:configure` を実行し EAS プロジェクトをリンク（加入者が一度だけ実施）
+- [ ] `npx eas env:create --scope project --environment production` で `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` を登録する。`.env` はローカル専用（gitignore済み）で EAS クラウドビルドには渡らないため、未設定だと `lib/supabase.ts` が起動直後に throw して即クラッシュする（詳細: `.claude/lessons/eas-build-missing-supabase-env.md`）
 - [ ] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出
 - [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須）
 - [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）
