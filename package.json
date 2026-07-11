@@ -44,9 +44,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:ios:preview": "eas build --platform ios --profile preview",
-    "build:ios:production": "eas build --platform ios --profile production",
-    "submit:ios": "eas submit --platform ios --profile production",
+    "build:ios:preview": ". ./.env.eas.local 2>/dev/null; eas build --platform ios --profile preview",
+    "build:ios:production": ". ./.env.eas.local 2>/dev/null; eas build --platform ios --profile production",
+    "submit:ios": ". ./.env.eas.local 2>/dev/null; eas submit --platform ios --profile production --latest --non-interactive",
     "test": "jest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

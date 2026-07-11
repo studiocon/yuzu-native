@@ -13,17 +13,20 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
       "ios": {
         "resourceClass": "m-medium"
       }
     },
     "production": {
-      "autoIncrement": true,
-      "channel": "production"
+      "autoIncrement": true
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "DJN7Q8XTJB",
+        "ascAppId": "6789174146"
+      }
+    }
   }
 }

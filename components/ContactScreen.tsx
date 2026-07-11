@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
@@ -98,7 +98,11 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {step === "input" ? (
             <>
               <Text style={styles.sub}>改善要望、不具合、感想。{"\n"}声を聞かせてくれ。</Text>
@@ -159,6 +163,7 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
             <Text style={styles.sub}>受け取りました。{"\n"}必要があれば返信します。</Text>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -166,6 +171,7 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.yuzuWhite },
+  flex: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

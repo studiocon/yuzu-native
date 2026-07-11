@@ -18,7 +18,12 @@ type Step = "email" | "code";
 // 無駄な送信リクエストを減らすための軽いチェック。
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 
-export default function AuthScreen() {
+type Props = {
+  /** 指定時のみ email ステップに戻る導線を表示する（onboarding からの遷移用）。 */
+  onBack?: () => void;
+};
+
+export default function AuthScreen({ onBack }: Props = {}) {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -101,6 +106,16 @@ export default function AuthScreen() {
               >
                 <Text style={styles.buttonLabel}>{loading ? "送信中…" : "送れ"}</Text>
               </Pressable>
+              {onBack && (
+                <Pressable
+                  onPress={onBack}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="戻る"
+                >
+                  <Text style={styles.back}>戻る</Text>
+                </Pressable>
+              )}
             </>
           ) : (
             <>

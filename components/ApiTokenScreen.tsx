@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
@@ -142,7 +142,11 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {step === "list" ? (
             <>
               <Text style={styles.sub}>
@@ -221,6 +225,7 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
             )
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -228,6 +233,7 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.yuzuWhite },
+  flex: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

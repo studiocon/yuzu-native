@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, FlatList, StyleSheet, View } from "react-native";
+import { FlatList, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
-} from "expo-audio";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
 import { API_BASE } from "../lib/config";
 import { colors, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
 import { useSentimentScores } from "../lib/useSentimentScores";
+import { useRecording, type TranscribeOutcome } from "../lib/useRecording";
 import { pickPrompt } from "../lib/prompts";
+import { clearPendingRecord, loadPendingRecord } from "../lib/pendingRecord";
 import { computeStreak } from "../lib/streak";
 import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
@@ -25,7 +21,7 @@ import LogScreen, { type LogRowItem } from "./LogScreen";
 import InsightScreen from "./InsightScreen";
 import SettingsScreen from "./SettingsScreen";
 import IndexDetailModal from "./IndexDetailModal";
-import RecordModal, { type ModalPhase } from "./RecordModal";
+import RecordModal from "./RecordModal";
 
 type Stats = {
   streak: number;
@@ -51,33 +47,23 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [tab, setTab] = useState<MainTab>("log");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
-  const [phase, setPhase] = useState<ModalPhase>("idle");
-  const [statusText, setStatusText] = useState("");
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const [recordingStartedAt, setRecordingStartedAt] = useState<number | null>(null);
   const [carvedPost, setCarvedPost] = useState<CarvedPost | null>(null);
   const [logs, setLogs] = useState<Post[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [firstPostAt, setFirstPostAt] = useState<number | null>(null);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [prompt, setPrompt] = useState(() => pickPrompt());
 
-  // android.audioSource: 'voice_communication' で OS レベルの AGC/エコーキャンセルを有効化。
-  // 未指定だと小声の入力がそのまま低レベルでエンコードされ、ElevenLabs 側の音声検出（VAD）で
-  // 無音判定される事故につながる（yuzu-app 側の同事象を getUserMedia の autoGainControl で修正、
-  // ネイティブ側は expo-audio の Android audioSource で同等の効果を狙う）。
-  const recorder = useAudioRecorder({
-    ...RecordingPresets.HIGH_QUALITY,
-    android: { ...RecordingPresets.HIGH_QUALITY.android, audioSource: "voice_communication" },
-    isMeteringEnabled: true,
+  const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
+  const recording = useRecording({
+    canStart: () => !limitReached,
+    onRecordingStart: () => setCarvedPost(null),
+    onTranscribed: handleTranscribed,
   });
-  const armedRef = useRef(false);
-  const pendingReleaseRef = useRef(false);
-  const startedAtRef = useRef(0);
-  const recorderRef = useRef(recorder);
-  recorderRef.current = recorder;
   const mountedRef = useRef(true);
   const listRef = useRef<FlatList<LogRowItem>>(null);
   const insets = useSafeAreaInsets();
@@ -115,6 +101,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           charCount: p.char_count ?? 0,
         })),
       );
+      setNextOffset(typeof data?.nextOffset === "number" ? data.nextOffset : null);
       if (typeof data?.firstPostAt === "number") setFirstPostAt(data.firstPostAt);
       if (typeof data?.streak === "number") {
         setStats({
@@ -136,20 +123,82 @@ export default function RecordScreen({ session }: { session: Session }) {
     fetchLogs();
   }, [fetchLogs]);
 
-  // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する。
+  // ログイン直後: 未ログイン onboarding で退避した pendingRecord（AsyncStorage）を読み出して保存する。
+  // Web（app/page.tsx:224-274）は POST 前に sessionStorage のキーを削除するが、ネイティブは
+  // 「成功時」または「4xx の確定拒否時」にのみ削除する意図的ドリフト。ネットワーク例外/5xxでは
+  // pending を残し、次回起動時の同じ effect で再試行できるようにする（Web はタブを離れたら
+  // 再試行の機会が無いが、ネイティブは次回起動が自然な再試行ポイントになるため）。
   useEffect(() => {
-    const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active" || !armedRef.current) return;
-      armedRef.current = false;
-      pendingReleaseRef.current = false;
-      setRecordingStartedAt(null);
-      recorderRef.current.stop().catch(() => {});
-      setPhase("error");
-      setStatusText("中断された、もう一度");
-      haptics.warning();
-    });
-    return () => sub.remove();
+    (async () => {
+      const pending = await loadPendingRecord();
+      if (!pending) return;
+      try {
+        const res = await apiFetch(`${API_BASE}/api/records`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: pending.text, durationMs: pending.durationMs }),
+        });
+        if (!mountedRef.current) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          await clearPendingRecord();
+          if (!mountedRef.current) return;
+          setCarvedPost({ index: data.post.index, text: pending.text });
+          recording.setPhase("carved");
+          setRecordOpen(true); // CompleteView をそのまま見せる
+          if (typeof data?.streak === "number") {
+            setStats((prev) => mergeStats(prev, { streak: data.streak, todayCount: data.todayCount, maxDaily: data.maxDaily }));
+          }
+          haptics.success();
+          fetchLogs();
+          return;
+        }
+
+        // 4xx（daily_limit 等の確定拒否）: サーバが恒久的に拒否したので再試行しても無駄。
+        // Web と同じく何も表示せず silent に諦める。
+        if (res.status >= 400 && res.status < 500) {
+          await clearPendingRecord();
+        }
+        // 5xx はサーバ側の一時的な不調とみなし、pending を残して次回起動時に再試行する。
+      } catch {
+        // ネットワーク例外: pending を残す（次回起動時に再試行）
+      }
+    })();
+    // マウント時（ログイン直後）に一度だけ実行する。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 2ページ目以降。ページ境界に新規投稿が挟まると offset がずれて前ページ末尾と重複しうるため id で除外する。
+  const loadMore = useCallback(async () => {
+    if (loadingMore || nextOffset === null) return;
+    setLoadingMore(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/records?limit=20&offset=${nextOffset}`);
+      if (!res.ok || !mountedRef.current) return;
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      const posts = Array.isArray(data?.posts) ? data.posts : [];
+      const mapped: Post[] = posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number; char_count?: number }) => ({
+        id: p.id,
+        text: p.text,
+        index: p.index,
+        createdAt: p.createdAt,
+        marked: p.marked ?? false,
+        durationMs: p.durationMs ?? 0,
+        charCount: p.char_count ?? 0,
+      }));
+      setLogs((prev) => {
+        const seen = new Set(prev.map((l) => l.id));
+        return [...prev, ...mapped.filter((p) => !seen.has(p.id))];
+      });
+      setNextOffset(typeof data?.nextOffset === "number" ? data.nextOffset : null);
+    } catch {
+      // silent: 次回 onEndReached が再発火すれば再試行できる
+    } finally {
+      if (mountedRef.current) setLoadingMore(false);
+    }
+  }, [loadingMore, nextOffset]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -175,8 +224,6 @@ export default function RecordScreen({ session }: { session: Session }) {
     }
   }
 
-  const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
-
   function openRecord() {
     if (limitReached) {
       haptics.warning();
@@ -185,9 +232,7 @@ export default function RecordScreen({ session }: { session: Session }) {
     }
     haptics.tapLight();
     setPrompt(pickPrompt());
-    setPhase("idle");
-    setStatusText("");
-    setPermissionDenied(false);
+    recording.reset();
     setCarvedPost(null);
     setRecordOpen(true);
   }
@@ -195,92 +240,30 @@ export default function RecordScreen({ session }: { session: Session }) {
   function closeRecord() {
     haptics.tapLight();
     setRecordOpen(false);
-    armedRef.current = false;
-    pendingReleaseRef.current = false;
-    setPhase("idle");
-    setStatusText("");
+    recording.reset();
     setCarvedPost(null);
-    setRecordingStartedAt(null);
   }
 
-  async function handlePressIn() {
-    if (phase === "carving" || limitReached) return;
-    pendingReleaseRef.current = false;
-    setStatusText("");
-    setPermissionDenied(false);
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      setPhase("error");
-      setPermissionDenied(true);
+  // useRecording の STT 完了コールバック。text は保存処理を行い、daily_limit/login_required は
+  // 対応する表示にフォールバックする（詳細は lib/useRecording.ts の TranscribeOutcome を参照）。
+  async function handleTranscribed(outcome: TranscribeOutcome) {
+    if (outcome.kind === "daily_limit") {
+      recording.setPhase("error");
+      recording.setStatusText("今日はここまで");
       haptics.warning();
       return;
     }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    armedRef.current = true;
-    startedAtRef.current = Date.now();
-    setPhase("recording");
-    setCarvedPost(null);
-    setRecordingStartedAt(startedAtRef.current);
-    haptics.tapMedium();
-
-    if (pendingReleaseRef.current) {
-      await finishRecording();
-    }
-  }
-
-  function handlePressOut() {
-    if (!armedRef.current) {
-      pendingReleaseRef.current = true;
+    if (outcome.kind === "login_required") {
+      // ログイン済み画面では実質発生しない想定。念のためのフォールバック表示。
+      recording.setPhase("error");
+      recording.setStatusText("ログインし直せ");
+      haptics.warning();
       return;
     }
-    finishRecording();
-  }
+    if (outcome.kind !== "text") return;
 
-  async function finishRecording() {
-    armedRef.current = false;
-    pendingReleaseRef.current = false;
-    setRecordingStartedAt(null);
-    await recorder.stop();
-
-    const uri = recorder.uri;
-    const durationMs = Date.now() - startedAtRef.current;
-    if (!uri) {
-      setPhase("error");
-      setStatusText("録音、失敗した");
-      haptics.error();
-      return;
-    }
-
-    // 録音停止 → 変換・保存中（CARVING）に入ったことを伝える軽いタップ。
-    // 実際に成功/失敗したかは後続の分岐でそれぞれ success()/error() を鳴らす。
-    haptics.tapLight();
-    setPhase("carving");
+    const { text: transcript, durationMs } = outcome;
     try {
-      const form = new FormData();
-      form.append("audio", { uri, name: "recording.m4a", type: "audio/m4a" } as unknown as Blob);
-
-      const sttRes = await apiFetch(`${API_BASE}/api/transcribe`, {
-        method: "POST",
-        body: form,
-      });
-      const sttData = await sttRes.json();
-      if (!mountedRef.current) return;
-      if (!sttRes.ok) {
-        setPhase("error");
-        setStatusText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
-        haptics.error();
-        return;
-      }
-      const transcript: string = sttData.text || "";
-      if (!transcript) {
-        setPhase("error");
-        setStatusText("無音、話せ");
-        haptics.warning();
-        return;
-      }
-
       const saveRes = await apiFetch(`${API_BASE}/api/records`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -289,23 +272,23 @@ export default function RecordScreen({ session }: { session: Session }) {
       const saveData = await saveRes.json();
       if (!mountedRef.current) return;
       if (!saveRes.ok) {
-        setPhase("error");
+        recording.setPhase("error");
         const errCode = saveData?.error;
         if (errCode === "daily_limit") {
-          setStatusText("今日はここまで");
+          recording.setStatusText("今日はここまで");
           if (typeof saveData?.todayCount === "number") {
             setStats((prev) => mergeStats(prev, { todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
-          setStatusText("ログインし直せ");
+          recording.setStatusText("ログインし直せ");
         } else {
-          setStatusText(`保存失敗（${saveRes.status}）`);
+          recording.setStatusText(`保存失敗（${saveRes.status}）`);
         }
         haptics.warning();
         return;
       }
 
-      setPhase("carved");
+      recording.setPhase("carved");
       setCarvedPost({ index: saveData.post.index, text: transcript });
       if (typeof saveData?.streak === "number") {
         setStats((prev) => mergeStats(prev, { streak: saveData.streak, todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
@@ -314,8 +297,8 @@ export default function RecordScreen({ session }: { session: Session }) {
       fetchLogs();
     } catch {
       if (!mountedRef.current) return;
-      setPhase("error");
-      setStatusText("送れなかった。もう一度。");
+      recording.setPhase("error");
+      recording.setStatusText("送れなかった。もう一度。");
       haptics.error();
     }
   }
@@ -345,6 +328,9 @@ export default function RecordScreen({ session }: { session: Session }) {
           onOpenDetail={setSelectedPost}
           listRef={listRef}
           listFooterPadding={96 + insets.bottom + spacing.xl * 2}
+          hasMore={nextOffset !== null}
+          loadingMore={loadingMore}
+          onLoadMore={loadMore}
         />
       ) : (
         <InsightScreen posts={logs} scores={scores} words={words} />
@@ -357,11 +343,11 @@ export default function RecordScreen({ session }: { session: Session }) {
 
       <RecordModal
         visible={recordOpen}
-        phase={phase}
-        statusText={statusText}
-        permissionDenied={permissionDenied}
-        recorder={recorder}
-        recordingStartedAt={recordingStartedAt}
+        phase={recording.phase}
+        statusText={recording.statusText}
+        permissionDenied={recording.permissionDenied}
+        recorder={recording.recorder}
+        recordingStartedAt={recording.recordingStartedAt}
         prompt={prompt}
         remaining={remaining}
         maxDaily={maxDaily}
@@ -370,8 +356,8 @@ export default function RecordScreen({ session }: { session: Session }) {
         week={week}
         totalMinutes={totalMinutes}
         streak={streak}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPressIn={recording.handlePressIn}
+        onPressOut={recording.handlePressOut}
         onClose={closeRecord}
       />
 

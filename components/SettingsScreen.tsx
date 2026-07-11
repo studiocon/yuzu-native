@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
@@ -204,41 +204,46 @@ function DeleteAccountConfirm({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.confirmScrim}>
         <Pressable style={StyleSheet.absoluteFill} onPress={deleting ? undefined : onClose} />
-        <View style={styles.confirmPanel}>
-          <Text style={styles.confirmTitle}>全部消す</Text>
-          <Text style={styles.confirmBody}>記録も、番号も、戻らない。</Text>
-          <Text style={styles.confirmPrompt}>YUZU と打て</Text>
-          <TextInput
-            style={styles.confirmInput}
-            value={confirmText}
-            onChangeText={setConfirmText}
-            editable={!deleting}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            spellCheck={false}
-            accessibilityLabel="確認のため YUZU と入力"
-          />
-          {error && <Text style={styles.confirmError}>{error}</Text>}
-          <View style={styles.confirmActions}>
-            <Pressable
-              onPress={() => {
-                haptics.tapLight();
-                onClose();
-              }}
-              disabled={deleting}
-              style={styles.confirmCancel}
-            >
-              <Text style={styles.confirmCancelLabel}>やめる</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleConfirm}
-              disabled={deleting || !canDelete}
-              style={[styles.confirmConfirm, (deleting || !canDelete) && styles.confirmConfirmDisabled]}
-            >
-              <Text style={styles.confirmConfirmLabel}>{deleting ? "削除中…" : "消す"}</Text>
-            </Pressable>
+        <KeyboardAvoidingView
+          style={styles.confirmKeyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.confirmPanel}>
+            <Text style={styles.confirmTitle}>全部消す</Text>
+            <Text style={styles.confirmBody}>記録も、番号も、戻らない。</Text>
+            <Text style={styles.confirmPrompt}>YUZU と打て</Text>
+            <TextInput
+              style={styles.confirmInput}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              editable={!deleting}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              spellCheck={false}
+              accessibilityLabel="確認のため YUZU と入力"
+            />
+            {error && <Text style={styles.confirmError}>{error}</Text>}
+            <View style={styles.confirmActions}>
+              <Pressable
+                onPress={() => {
+                  haptics.tapLight();
+                  onClose();
+                }}
+                disabled={deleting}
+                style={styles.confirmCancel}
+              >
+                <Text style={styles.confirmCancelLabel}>やめる</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirm}
+                disabled={deleting || !canDelete}
+                style={[styles.confirmConfirm, (deleting || !canDelete) && styles.confirmConfirmDisabled]}
+              >
+                <Text style={styles.confirmConfirmLabel}>{deleting ? "削除中…" : "消す"}</Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -308,6 +313,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: spacing.xl,
   },
+  confirmKeyboardView: { width: "100%", alignItems: "center" },
   confirmPanel: {
     width: "100%",
     backgroundColor: colors.surfaceCard,

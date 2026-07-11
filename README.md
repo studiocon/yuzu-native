@@ -118,23 +118,56 @@ npm run submit:ios             # ビルド済みアーカイブを App Store Con
 
 トークンリフレッシュ絡みの 401（長時間バックグラウンド後にAPIが401で落ちる問題）は解消済み: `lib/apiFetch.ts` が呼び出し直前に毎回 `getSession()` を通し、期限切れなら Supabase SDK 内部のリフレッシュを経由してから叩くため、実機検証でも stale session による 401 リスクは無い。
 
+録音ロジックを `components/RecordScreen.tsx` から `lib/useRecording.ts` に抽出（フック化。逐語移動 + `onTranscribed` 化）。上記の「長押し」「リリース」「バックグラウンド/割り込み」の3項目はこの抽出の回帰確認を兼ねる。加えてこの抽出で新規追加した2点は未検証:
+
+- [ ] 文字起こし結果が trim 後5文字未満のとき phase=error / 「短い、話せ」表示 + haptics.warning になるか
+- [ ] `/api/transcribe` が 429 を返したとき、body の `error` フィールドに応じて login_required/daily_limit 分岐が機能するか（バックエンド側で 429 を再現できる状況が無いと能動的に踏めない可能性あり）
+
+未ログイン onboarding フロー（`components/OnboardingScreen.tsx` 新規、`App.tsx` / `components/AuthScreen.tsx` / `components/RecordScreen.tsx` 変更）を追加。`RecordModal.tsx` / `lib/useRecording.ts` は無変更で再利用のみだが、録音・Haptics・AsyncStorage永続化・新規レイアウトが絡むため以下は未検証:
+
+- [ ] hero（「声を刻め」+マイクボタン）→ 長押し録音 → プレビュー（CARVEDスタンプ + 「刻む」）→ ログイン → 保存、の一連が実機で通しで動くか
+- [ ] 「刻む」タップ後に `savePendingRecord` が AsyncStorage に書き込まれ、ログイン成功後 `RecordScreen` マウント時の effect が読み出して `/api/records` に POST → 成功時 `CompleteView`（CARVED + streak/minutes）がそのまま表示されるか
+- [ ] pending 保存が 4xx（daily_limit 等）で確定拒否された場合に silent に諦めて `clearPendingRecord` されるか、5xx/ネットワーク例外では pending が残り次回起動時に再試行されるか
+- [ ] onboarding の `RecordModal` は `limitReached` を常に false 固定にしている（匿名側は日次上限をクライアントで追跡しないため）。実際に匿名 STT の 1日上限（429 daily_limit）を踏んだときログイン誘導に倒れるか
+- [ ] `AuthScreen` に新設した email ステップの「戻る」導線（onboarding のプレビュー画面へ復帰）でレイアウト崩れが無いか
+- [ ] hero 画面のマイクボタン（96px）・下部「ログイン」リンクのタップ領域とレイアウトが実機で意図通りか
+
+キーボード回避を `ContactScreen` / `ApiTokenScreen` / `SettingsScreen`（削除確認）に追加（`KeyboardAvoidingView`、AuthScreen と同パターン）。レイアウト挙動のため以下は未検証:
+
+- [ ] 上記3画面でキーボード表示時に入力欄・ボタンが隠れず、キーボードを出したままボタンをタップできるか（`keyboardShouldPersistTaps`）
+
+LOG 一覧の無限スクロール（`?limit=20&offset=` ページネーション、id 重複排除、フッター `LOADING`）を追加。JSロジックのため Expo Go でも確認可:
+
+- [ ] 21件以上の記録がある状態で末尾までスクロール → 追加読み込みされ、重複行やクラッシュが無いか
+
 ## TestFlight 提出前チェックリスト
 
-コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。残るのはアカウント・提出作業・インフラ側のタスク:
+コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
 
-- [ ] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）。無料 Apple ID では TestFlight に進めない
-- [ ] `eas init` / `eas build:configure` を実行し EAS プロジェクトをリンク（加入者が一度だけ実施）
-- [ ] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出
-- [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須）
-- [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）
-- [ ] yuzu-app リポジトリの Supabase マイグレーションを本番ダッシュボードに適用: `20260702075418_report_jobs.sql` と `20260702130000_anon_stt_rate_limit.sql`（未適用。本体側の機能に必要なため提出前に反映すること）
+- [x] Apple Developer Program 加入（[yuzu-app#63](https://github.com/studiocon/yuzu-app/issues/63)）
+- [x] `eas init` 実施済み。EAS プロジェクトは `kyotakonnos-team/yuzu-native` にリンク済み（`app.json` の `expo.extra.eas.projectId`）
+- [x] `npm run build:ios:production` → `npm run submit:ios` でビルド・提出（内部テスターにTestFlight配信済み、起動時クラッシュ・スプラッシュ固まりは解消済み）
+- [ ] App Store Connect 側でアプリレコード作成・プライバシーポリシー URL の用意（メールアドレス・音声データを扱うため必須。本文は `yuzu-app/notes/legal/privacy-v1-draft.md` に下書きあるが公開URL未確定。[yuzu-app#105](https://github.com/studiocon/yuzu-app/issues/105)）
+- [ ] 外部テスターへの TestFlight 配布（Beta App Review が必要）を行う場合、審査ノートにメール OTP ログインの手順とレビュー用に受信可能なメールアドレスを明記する（固定パスワードが無い方式のため）。現状は内部テスターのみで未実施
+- [ ] yuzu-app リポジトリの Supabase マイグレーションを本番ダッシュボードに適用: `20260702075418_report_jobs.sql` と `20260702130000_anon_stt_rate_limit.sql`（未適用。匿名STTのレート制限がcookieのみのフォールバック動作になっている）
 - [x] 輸出コンプライアンス（暗号化申告）: 標準的な HTTPS 通信とローカルトークン暗号化（AES, `lib/supabase.ts` の `LargeSecureStore`）のみで独自暗号を実装していないため exempt 対象。`app.json` に `ITSAppUsesNonExemptEncryption: false` を設定済み
+
+## App Store 公開（一般審査提出）までの残タスク
+
+TestFlight（内部配信）は完了。ストアでの一般公開にはさらに以下が必要（詳細は [yuzu-app milestone v0.3 iOS Launch](https://github.com/studiocon/yuzu-app/milestone/3) 参照）:
+
+- [ ] プライバシーポリシー・利用規約の公開URL確定（[yuzu-app#105](https://github.com/studiocon/yuzu-app/issues/105)）→ 確定後、設定画面の LEGAL セクションを復活（下記参照）
+- [ ] App Store Connect の App Privacy（プライバシー栄養ラベル）開示 — マイク/メール/利用状況の収集内容を申告（[yuzu-app#98](https://github.com/studiocon/yuzu-app/issues/98)）
+- [ ] ストア提出アセット一式 — App Icon 各サイズ・スクリーンショット（iPhoneのみ、iPad対応は撤去済み）・説明文・キーワード・年齢レーティング（[yuzu-app#99](https://github.com/studiocon/yuzu-app/issues/99)）
+- [ ] App Store Connect で「Submit for Review」（一般審査。TestFlightのBeta App Reviewとは別）
+
+上記が揃うまでは TestFlight 内部テスターのみでの検証運用が現実的。
 
 ## 既知の制約
 
 - LINE Seed JP フォント未バンドル（上記「デザイン」参照）
 - 感情スコアはDBに永続化されない（yuzu-app と同じ設計。端末を変えると再解析が必要）
-- `eas.json` は用意済みだが EAS プロジェクト自体は未リンク（`eas init` 未実施。Apple Developer Program 加入者が実施する想定）
 - Android 実機での検証記録なし（手順は iOS 前提のみ）
 - テストは `lib/` の純粋関数のみ。`components/` の画面コンポーネントは未カバー（RN実機/シミュレータでのE2E的な検証が必要なため）
 - 設定画面の LEGAL / ALERT / プラン の各行は審査対策として一時的に非表示（実ページ未公開のため）。LEGAL セクションはページ公開後に復活予定（[components/SettingsScreen.tsx](components/SettingsScreen.tsx)）
+- Apple/Google OAuth・Magic Linkのディープリンクは未対応（現状メールOTPのみ。[yuzu-app#100](https://github.com/studiocon/yuzu-app/issues/100)）

@@ -90,6 +90,9 @@ type Props = {
   onOpenDetail: (post: Post) => void;
   listRef: React.RefObject<FlatList<LogRowItem> | null>;
   listFooterPadding: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 };
 
 export default function LogScreen({
@@ -102,6 +105,9 @@ export default function LogScreen({
   onOpenDetail,
   listRef,
   listFooterPadding,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -152,6 +158,14 @@ export default function LogScreen({
       ),
     [scores, onOpenDetail],
   );
+
+  // 無限スクロール。MARKED フィルタ中は発火させない（Web版 IndexView と同様）。
+  // rows.length > 0 ガードで初期描画（未ロード時に data=[]）での誤発火を防ぐ。
+  const handleEndReached = useCallback(() => {
+    if (logsLoaded && filter === "all" && hasMore && rows.length > 0) {
+      onLoadMore();
+    }
+  }, [logsLoaded, filter, hasMore, rows.length, onLoadMore]);
 
   return (
     <FlatList
@@ -208,6 +222,9 @@ export default function LogScreen({
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.inkMuted} colors={[colors.yuzuZest]} />
       }
       renderItem={renderItem}
+      onEndReached={handleEndReached}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={loadingMore ? <Text style={styles.loadingMoreLabel}>LOADING</Text> : null}
     />
   );
 }
@@ -294,6 +311,14 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.sm,
   },
   skeletonRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
+  loadingMoreLabel: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+    textAlign: "center",
+    paddingVertical: spacing.lg,
+  },
   divider: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingTop: spacing.md },
   dividerDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.inkMuted },
   dividerLabel: {
