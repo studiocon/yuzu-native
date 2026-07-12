@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "style.yuzu.mobile",
+      "icon": "./assets/YUZU.icon",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "声を録音し、文字起こしして日々の記録として保存するために使う。",
         "ITSAppUsesNonExemptEncryption": false
