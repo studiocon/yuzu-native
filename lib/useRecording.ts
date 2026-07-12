@@ -9,6 +9,7 @@ import {
 import { apiFetch } from "./apiFetch";
 import { API_BASE } from "./config";
 import * as haptics from "./haptics";
+import { track } from "./analytics";
 import type { ModalPhase } from "../components/RecordModal";
 
 export type TranscribeOutcome =
@@ -87,6 +88,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     await recorder.prepareToRecordAsync();
     recorder.record();
     armedRef.current = true;
+    track("record_started");
     startedAtRef.current = Date.now();
     setPhase("recording");
     onRecordingStart?.();
@@ -155,6 +157,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
           return;
         }
         // JSON parse 失敗、または未知の error コード: 従来どおりの汎用 STT エラー表示。
+        track("transcribe_failed", { errorCode: String(sttRes.status) });
         setPhase("error");
         setStatusText(`STT 失敗（${sttRes.status}）`);
         haptics.error();
@@ -164,6 +167,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       const sttData = await sttRes.json();
       if (!mountedRef.current) return;
       if (!sttRes.ok) {
+        track("transcribe_failed", { errorCode: String(sttRes.status) });
         setPhase("error");
         setStatusText(sttRes.status === 401 ? "ログインし直せ" : `STT 失敗（${sttRes.status}）`);
         haptics.error();
@@ -171,6 +175,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       }
       const transcript: string = sttData.text || "";
       if (!transcript) {
+        track("transcribe_failed", { errorCode: "silence" });
         setPhase("error");
         setStatusText("無音、話せ");
         haptics.warning();
@@ -179,15 +184,18 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
 
       // 短文チェック: trim 後5文字未満は成功扱いにしない（web版 useRecorder.ts:236 とパリティ）。
       if (transcript.trim().length < 5) {
+        track("transcribe_failed", { errorCode: "short" });
         setPhase("error");
         setStatusText("短い、話せ");
         haptics.warning();
         return;
       }
 
+      track("transcribe_succeeded", { durationMs, charCount: transcript.length });
       await onTranscribed({ kind: "text", text: transcript, durationMs });
     } catch {
       if (!mountedRef.current) return;
+      track("transcribe_failed", { errorCode: "network" });
       setPhase("error");
       setStatusText("送れなかった。もう一度。");
       haptics.error();

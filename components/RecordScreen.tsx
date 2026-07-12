@@ -11,6 +11,7 @@ import { useRecording, type TranscribeOutcome } from "../lib/useRecording";
 import { pickPrompt } from "../lib/prompts";
 import { clearPendingRecord, loadPendingRecord } from "../lib/pendingRecord";
 import { computeStreak } from "../lib/streak";
+import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
 import type { WordFreq } from "../lib/insightTypes";
@@ -275,6 +276,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         recording.setPhase("error");
         const errCode = saveData?.error;
         if (errCode === "daily_limit") {
+          track("daily_limit_hit");
           recording.setStatusText("今日はここまで");
           if (typeof saveData?.todayCount === "number") {
             setStats((prev) => mergeStats(prev, { todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
@@ -293,6 +295,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (typeof saveData?.streak === "number") {
         setStats((prev) => mergeStats(prev, { streak: saveData.streak, todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
       }
+      track("post_created", { durationMs: saveData.post.durationMs, charCount: saveData.post.char_count });
       haptics.success();
       fetchLogs();
     } catch {

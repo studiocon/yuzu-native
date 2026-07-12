@@ -1,3 +1,6 @@
+// Sentry は他の import より先に初期化する（副作用 import）。起動直後のクラッシュも拾うため。
+import "./lib/sentry";
+
 import { useCallback, useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,7 +12,10 @@ import Unbounded_400Regular from "@expo-google-fonts/unbounded/400Regular/Unboun
 import Unbounded_700Bold from "@expo-google-fonts/unbounded/700Bold/Unbounded_700Bold.ttf";
 import Unbounded_900Black from "@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf";
 import type { Session } from "@supabase/supabase-js";
+import { PostHogProvider } from "posthog-react-native";
 import { supabase } from "./lib/supabase";
+import { identify, posthogClient, resetIdentity, track } from "./lib/analytics";
+import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingScreen from "./components/OnboardingScreen";
 import RecordScreen from "./components/RecordScreen";
 
@@ -23,7 +29,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 // この時間を過ぎたら未解決要素を諦めて先に進め、UI を必ず出す。
 const STARTUP_TIMEOUT_MS = 5000;
 
-export default function App() {
+// AppInner を ErrorBoundary で包む前提の分割。ready フラグが立つ前（フォント/セッション
+// 読み込み中）の early return もこの境界内に入れて、起動直後のクラッシュも取りこぼさない。
+function AppInner() {
   // undefined = 起動直後の読み込み中、null = 未ログイン、Session = ログイン済み
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   // 起動が想定時間を超えたら true。未解決要素を諦めて先に進むためのフラグ。
@@ -50,13 +58,25 @@ export default function App() {
       .getSession()
       .then(({ data }) => {
         if (mounted) setSession(data.session);
+        // 起動時に既にセッションが復元されている場合も distinctId を紐づけておく
+        // （SIGNED_IN イベントは発火しないため、ここでも identify を呼ぶ）。
+        if (data.session?.user) identify(data.session.user.id);
       })
       .catch(() => {
         if (mounted) setSession(null);
       });
 
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, next) => {
       if (mounted) setSession(next);
+      // ログイン直後: PostHog の distinctId をユーザー ID に紐づけて識別する。
+      if (event === "SIGNED_IN" && next?.user) {
+        identify(next.user.id);
+        track("login_succeeded");
+      }
+      // ログアウト: distinctId をリセットして新しい匿名 ID を発行する。
+      if (event === "SIGNED_OUT") {
+        resetIdentity();
+      }
     });
 
     const timer = setTimeout(() => {
@@ -82,10 +102,21 @@ export default function App() {
 
   if (!ready) return null;
 
-  return (
+  const content = (
     <SafeAreaProvider onLayout={onLayoutRootView}>
       {effectiveSession ? <RecordScreen session={effectiveSession} /> : <OnboardingScreen />}
       <StatusBar style="dark" />
     </SafeAreaProvider>
+  );
+
+  return posthogClient ? <PostHogProvider client={posthogClient}>{content}</PostHogProvider> : content;
+}
+
+// 実際のルート。AppInner 全体（ready 判定前の early return も含む）を ErrorBoundary で包む。
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }

@@ -46,7 +46,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#FAFAF5"
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-localization"
     ],
     "extra": {
       "eas": {
