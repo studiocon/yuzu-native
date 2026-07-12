@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
 import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
@@ -11,8 +12,29 @@ import { API_BASE } from "../lib/config";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
+import {
+  applyReminderSettings,
+  DEFAULT_REMINDER_SETTINGS,
+  loadReminderSettings,
+  requestNotificationPermission,
+  type ReminderSettings,
+} from "../lib/reminder";
 import ApiTokenScreen from "./ApiTokenScreen";
 import ContactScreen from "./ContactScreen";
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function formatTime(hour: number, minute: number): string {
+  return `${pad2(hour)}:${pad2(minute)}`;
+}
+
+function timeToDate(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
 
 type Props = {
   visible: boolean;
@@ -25,9 +47,40 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   const [tokenOpen, setTokenOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  const [reminder, setReminder] = useState<ReminderSettings>(DEFAULT_REMINDER_SETTINGS);
+  const [reminderDenied, setReminderDenied] = useState(false);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
 
   const email = session.user.email ?? "―";
   const shortId = session.user.id.slice(0, 8) + "...";
+
+  useEffect(() => {
+    loadReminderSettings().then(setReminder);
+  }, []);
+
+  async function handleToggleReminder(next: boolean) {
+    haptics.tapLight();
+    if (next) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        haptics.warning();
+        setReminderDenied(true);
+        setTimeout(() => setReminderDenied(false), 2000);
+        return;
+      }
+    }
+    const updated = { ...reminder, enabled: next };
+    setReminder(updated);
+    await applyReminderSettings(updated);
+  }
+
+  async function handleTimeChange(event: DateTimePickerEvent, date?: Date) {
+    if (Platform.OS === "android") setTimePickerOpen(false);
+    if (event.type !== "set" || !date) return;
+    const updated = { ...reminder, hour: date.getHours(), minute: date.getMinutes() };
+    setReminder(updated);
+    await applyReminderSettings(updated);
+  }
 
   async function handleCopyId() {
     await Clipboard.setStringAsync(session.user.id);
@@ -81,6 +134,37 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
                 <Text style={styles.rowValueMono}>{idCopied ? "COPIED" : shortId}</Text>
               </View>
             </Pressable>
+          </Section>
+
+          <Section title="REMINDER">
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>リマインダー</Text>
+              <View style={styles.rowTrailing}>
+                {reminderDenied && <Text style={styles.rowError}>通知を許可しろ</Text>}
+                <Switch
+                  value={reminder.enabled}
+                  onValueChange={handleToggleReminder}
+                  trackColor={{ false: colors.surfaceBorder, true: colors.yuzuZest }}
+                  accessibilityLabel="リマインダー"
+                />
+              </View>
+            </View>
+            {reminder.enabled && (
+              <Pressable
+                onPress={() => {
+                  haptics.tapLight();
+                  setTimePickerOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="リマインド時刻を変更"
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              >
+                <Text style={styles.rowLabel}>時刻</Text>
+                <View style={styles.rowTrailing}>
+                  <Text style={styles.rowValueMono}>{formatTime(reminder.hour, reminder.minute)}</Text>
+                </View>
+              </Pressable>
+            )}
           </Section>
 
           <Section title="CONNECT">
@@ -157,6 +241,39 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           defaultEmail={session.user.email ?? ""}
           onClose={() => setContactOpen(false)}
         />
+
+        {Platform.OS === "android" && timePickerOpen && (
+          <DateTimePicker
+            value={timeToDate(reminder.hour, reminder.minute)}
+            mode="time"
+            display="default"
+            onChange={handleTimeChange}
+          />
+        )}
+
+        {Platform.OS === "ios" && (
+          <Modal visible={timePickerOpen} transparent animationType="fade" onRequestClose={() => setTimePickerOpen(false)}>
+            <View style={styles.confirmScrim}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setTimePickerOpen(false)} />
+              <View style={styles.timeSheet}>
+                <DateTimePicker
+                  value={timeToDate(reminder.hour, reminder.minute)}
+                  mode="time"
+                  display="spinner"
+                  onChange={handleTimeChange}
+                />
+                <Pressable
+                  onPress={() => setTimePickerOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="閉じる"
+                  style={styles.timeCloseBtn}
+                >
+                  <Text style={styles.timeCloseLabel}>閉じる</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+        )}
       </SafeAreaView>
       </SafeAreaProvider>
     </Modal>
@@ -312,6 +429,20 @@ const styles = StyleSheet.create({
   rowTrailing: { flex: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.xs, marginLeft: spacing.md },
   rowValue: { flexShrink: 1, fontSize: fontSize.sm, color: colors.inkMuted, textAlign: "right" },
   rowValueMono: { fontSize: fontSize.sm, color: colors.inkMuted, fontFamily: fonts.displayRegular },
+  rowError: { fontSize: fontSize.sm, color: colors.danger },
+  timeSheet: {
+    width: "100%",
+    backgroundColor: colors.surfaceCard,
+    borderTopLeftRadius: radius.card,
+    borderTopRightRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    padding: spacing.xl,
+    gap: spacing.md,
+    alignItems: "center",
+  },
+  timeCloseBtn: { paddingVertical: spacing.md, paddingHorizontal: spacing.xl },
+  timeCloseLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.sm, color: colors.ink },
   dangerRow: {
     flexDirection: "row",
     alignItems: "center",

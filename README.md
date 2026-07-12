@@ -151,6 +151,15 @@ UX改善8件+sweep（触覚・SafeArea・チャート統一・アニメーショ
 - [ ] LOG 詳細の LENGTH / DAY / CHARS ラベルが2行に折り返さないか
 - [ ] LOG 詳細で MARK を押しても本文・声紋アニメーションが再生されない（再リビールしない）か
 
+設定画面にリマインダー機能を追加（`lib/reminder.ts`、`components/SettingsScreen.tsx`）。トグルON時に `expo-notifications` で通知権限をリクエストし、許可されれば毎日指定時刻に DAILY トリガーでローカル通知をスケジュールする。時刻選択は `@react-native-community/datetimepicker`（iOS: カスタムシート内 spinner、Android: ネイティブダイアログ）。通知・権限ダイアログ・ネイティブ時刻ピッカーが絡むため実機（またはExpo Go）での確認が必要:
+
+- [ ] トグルONで通知許可ダイアログが出て、許可すると指定時刻（デフォルト21:00）に通知が届くか
+- [ ] 通知を拒否した場合、トグルがONのままにならず「通知を許可しろ」が一瞬表示されるか
+- [ ] 時刻行をタップ→ iOS は spinner シートが開き「閉じる」で確定・閉じるか。Android はネイティブダイアログが開閉し、選択した時刻が反映されるか
+- [ ] 時刻変更後、翌日以降も新しい時刻に通知が届くか（同一 identifier で再スケジュールされているか）
+- [ ] トグルOFFで通知がキャンセルされ、以降届かなくなるか
+- [ ] アプリを再起動しても設定（ON/OFF・時刻）が保持されるか（AsyncStorage永続化）
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
