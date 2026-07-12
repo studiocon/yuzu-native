@@ -7,7 +7,7 @@ import Skeleton from "./Skeleton";
 import * as haptics from "../lib/haptics";
 import type { ReportMeta } from "../lib/insightTypes";
 
-const SPARK_H = 72;
+const SPARK_H = 110;
 const SPARK_ZERO = SPARK_H / 2;
 const SPARK_AMP = SPARK_H / 2 - 6;
 const SPARK_W = 100;
@@ -65,6 +65,8 @@ export default function ReportCard({ meta, onPress }: { meta: ReportMeta; onPres
         haptics.tapLight();
         onPress();
       }}
+      accessibilityRole="button"
+      accessibilityLabel={`${kindLabel} ${span} のレポートを開く`}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
       {edgeColor && <View style={[styles.edge, { backgroundColor: edgeColor }]} />}

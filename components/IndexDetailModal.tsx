@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CopyIcon, PushPinIcon, PushPinSlashIcon, XIcon } from "phosphor-react-native";
@@ -90,7 +90,10 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
         Animated.timing(v, { toValue: 1, duration: 420, easing: Easing.out(Easing.ease), useNativeDriver: true }),
       ),
     ).start();
-  }, [post, paraAnims, reduceMotion]);
+    // post?.id のみを依存にする：MARK トグル等で親の posts 配列が再生成され post の
+    // オブジェクト参照だけが変わった時に、同じ投稿なのに段落リビールを再発火させないため。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, paraAnims, reduceMotion]);
 
   // 感情カラー声紋ヒーローは、開いた瞬間に下から立ち上がる。
   const voiceGrow = useRef(new Animated.Value(0)).current;
@@ -102,7 +105,10 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
     }
     voiceGrow.setValue(0);
     Animated.timing(voiceGrow, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [post, reduceMotion, voiceGrow]);
+    // post?.id のみを依存にする：MARK トグル等で post の参照だけが変わった時に、
+    // 同じ投稿なのに声紋の立ち上がりアニメーションを再発火させないため。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, reduceMotion, voiceGrow]);
 
   if (!post) return null;
 
@@ -119,6 +125,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
 
   function fireMark() {
     if (!post) return;
+    haptics.tapLight();
     const next = !marked;
     setMarked(next);
     onToggleMark(post.id, next);
@@ -145,6 +152,10 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <Pressable
           onPress={() => {
@@ -195,19 +206,19 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
             <View style={styles.statsRow}>
               {lengthLabel !== null && (
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>LENGTH</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>LENGTH</Text>
                   <Text style={styles.statValue}>{lengthLabel}</Text>
                 </View>
               )}
               {dayLabel !== null && (
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>DAY</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>DAY</Text>
                   <Text style={styles.statValue}>{dayLabel}</Text>
                 </View>
               )}
               {charsLabel !== null && (
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>CHARS</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>CHARS</Text>
                   <Text style={styles.statValue}>{charsLabel}</Text>
                 </View>
               )}
@@ -269,6 +280,7 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
           </View>
         </ScrollView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -305,12 +317,13 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
     letterSpacing: fontSize.xs * letterSpacing.label,
   },
-  statsRow: { flexDirection: "row", gap: spacing.md },
+  statsRow: { flexDirection: "row", gap: spacing.sm },
   statCard: {
     flex: 1,
     alignItems: "flex-start",
     gap: spacing.xs,
-    padding: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
     borderRadius: radius.card,
@@ -319,7 +332,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
     color: "rgba(255,255,255,0.6)",
-    letterSpacing: fontSize.xs * letterSpacing.widest,
+    letterSpacing: fontSize.xs * letterSpacing.wide,
     textTransform: "uppercase",
   },
   statValue: { fontFamily: fonts.displayBlack, fontSize: 36, color: colors.yuzuWhite },

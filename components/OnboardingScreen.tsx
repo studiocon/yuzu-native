@@ -69,7 +69,13 @@ export default function OnboardingScreen() {
       {pending ? (
         <PreviewView pending={pending} onSave={handleSave} />
       ) : (
-        <HeroView onOpenRecord={openRecord} onLogin={() => setAuthOpen(true)} />
+        <HeroView
+          onOpenRecord={openRecord}
+          onLogin={() => {
+            haptics.tapLight();
+            setAuthOpen(true);
+          }}
+        />
       )}
 
       <RecordModal

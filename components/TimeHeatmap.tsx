@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { useSkeletonPulse } from "./Skeleton";
+import * as haptics from "../lib/haptics";
 import type { HeatmapCell } from "../lib/insightTypes";
 
 const BUCKETS = 12;
@@ -80,7 +81,12 @@ export default function TimeHeatmap({ cells }: { cells: HeatmapCell[] }) {
               return (
                 <Pressable
                   key={bucket}
-                  onPress={() => setHover(c ?? { date, bucket, charCount: 0 })}
+                  onPress={() => {
+                    haptics.selectionChanged();
+                    setHover(c ?? { date, bucket, charCount: 0 });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${fmtDateLabel(date)} ${fmtHour(bucket * 2)}時台の文字数を見る`}
                   style={[
                     styles.cell,
                     {

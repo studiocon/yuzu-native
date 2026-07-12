@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import type { AudioRecorder } from "expo-audio";
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -60,10 +60,15 @@ export default function RecordModal(props: Props) {
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={props.onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
-      <View style={styles.root}>
-        <RecordModalBackground />
-        <ModalBody {...props} />
-      </View>
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
+        <View style={styles.root}>
+          <RecordModalBackground />
+          <ModalBody {...props} />
+        </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -371,7 +376,12 @@ function CompleteView({
         </View>
       </View>
 
-      <Pressable onPress={onBack} style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="閉じる"
+        style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+      >
         <Text style={styles.backBtnLabel}>閉じる</Text>
       </Pressable>
     </View>

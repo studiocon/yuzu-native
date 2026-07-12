@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { apiFetch } from "../lib/apiFetch";
@@ -117,7 +117,13 @@ export default function ReportDetailModal({ periodKey, scores, onClose }: Props)
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
-      <ModalBody periodKey={periodKey} status={status} payload={payload} onClose={onClose} setRetryNonce={setRetryNonce} />
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故。
+          INSIGHT タブでは ReportDetailModal 自体が常時マウントされているため露呈しやすい）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
+        <ModalBody periodKey={periodKey} status={status} payload={payload} onClose={onClose} setRetryNonce={setRetryNonce} />
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -184,6 +190,8 @@ function ModalBody({
                 haptics.tapLight();
                 setRetryNonce((n) => n + 1);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="再試行"
               style={styles.retryBtn}
             >
               <Text style={styles.retryLabel}>RETRY</Text>

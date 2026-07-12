@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { XIcon } from "phosphor-react-native";
@@ -124,6 +124,10 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Text style={styles.headerLabel}>{step === "created" ? "ISSUED" : "CONNECT"}</Text>
@@ -162,7 +166,7 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
                   {tokens.map((t) => (
                     <View key={t.id} style={styles.tokenItem}>
                       <View style={styles.tokenItemMain}>
-                        <Text style={styles.tokenName}>{t.name}</Text>
+                        <Text style={styles.tokenName} numberOfLines={1}>{t.name}</Text>
                         <Text style={styles.tokenPrefix}>{t.tokenPrefix}…</Text>
                       </View>
                       <Text style={styles.tokenMeta}>
@@ -171,6 +175,9 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
                       <Pressable
                         onPress={() => handleRevoke(t.id)}
                         disabled={revokingId === t.id}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t.name} を削除`}
                         style={({ pressed }) => [styles.revokeBtn, pressed && styles.revokeBtnPressed]}
                       >
                         <Text style={styles.revokeLabel}>削除</Text>
@@ -198,6 +205,8 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
               <Pressable
                 onPress={handleIssue}
                 disabled={issuing}
+                accessibilityRole="button"
+                accessibilityLabel="トークンを発行"
                 style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
               >
                 <Text style={styles.primaryBtnLabel}>{issuing ? "発行中…" : "トークンを発行"}</Text>
@@ -214,11 +223,25 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
                   <Text style={styles.secretValue} selectable>{justIssued}</Text>
                 </View>
 
-                <Pressable onPress={handleCopy} style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}>
+                <Pressable
+                  onPress={handleCopy}
+                  accessibilityRole="button"
+                  accessibilityLabel="トークンをコピー"
+                  style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+                >
                   <Text style={styles.primaryBtnLabel}>{copied ? "COPIED" : "コピー"}</Text>
                 </Pressable>
 
-                <Pressable onPress={() => setStep("list")} style={styles.backLink}>
+                <Pressable
+                  onPress={() => {
+                    haptics.tapLight();
+                    setStep("list");
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="一覧へ戻る"
+                  style={styles.backLink}
+                >
                   <Text style={styles.backLinkLabel}>一覧へ戻る</Text>
                 </Pressable>
               </>
@@ -227,6 +250,7 @@ export default function ApiTokenScreen({ visible, onClose }: Props) {
         </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -254,8 +278,8 @@ const styles = StyleSheet.create({
   sub: { fontSize: fontSize.base, color: colors.inkSecondary, lineHeight: fontSize.base * 1.6 },
   empty: { fontSize: fontSize.base, color: colors.inkMuted },
   tokenItem: { gap: spacing.xs, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.md },
-  tokenItemMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  tokenName: { fontSize: fontSize.base, color: colors.ink, fontWeight: "700" },
+  tokenItemMain: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
+  tokenName: { flexShrink: 1, fontSize: fontSize.base, color: colors.ink, fontWeight: "700" },
   tokenPrefix: { fontFamily: fonts.displayRegular, fontSize: fontSize.xs, color: colors.inkMuted },
   tokenMeta: { fontSize: fontSize.xs, color: colors.inkMuted },
   revokeBtn: { alignSelf: "flex-start", paddingVertical: spacing.xs },

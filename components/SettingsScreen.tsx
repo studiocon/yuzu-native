@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-react-native";
@@ -45,6 +45,10 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Pressable
@@ -66,7 +70,12 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
         <ScrollView contentContainerStyle={styles.body}>
           <Section title="ACCOUNT">
             <Row label="メールアドレス" value={email} />
-            <Pressable onPress={handleCopyId} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+            <Pressable
+              onPress={handleCopyId}
+              accessibilityRole="button"
+              accessibilityLabel="ユーザーIDをコピー"
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            >
               <Text style={styles.rowLabel}>ユーザーID</Text>
               <View style={styles.rowTrailing}>
                 <Text style={styles.rowValueMono}>{idCopied ? "COPIED" : shortId}</Text>
@@ -80,6 +89,8 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
                 haptics.tapLight();
                 setTokenOpen(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="API トークン設定を開く"
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
               <Text style={styles.rowLabel}>API トークン</Text>
@@ -93,6 +104,8 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
                 haptics.tapLight();
                 setContactOpen(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="問い合わせを開く"
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             >
               <Text style={styles.rowLabel}>問い合わせ</Text>
@@ -107,6 +120,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
               onPress={handleSignOut}
               style={({ pressed }) => [styles.dangerRow, pressed && styles.rowPressed]}
               accessibilityRole="button"
+              accessibilityLabel="ログアウト"
             >
               <SignOutIcon size={16} color={colors.danger} weight="bold" />
               <Text style={styles.dangerLabel}>ログアウト</Text>
@@ -118,6 +132,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
               }}
               style={({ pressed }) => [styles.dangerRow, pressed && styles.rowPressed]}
               accessibilityRole="button"
+              accessibilityLabel="アカウントを削除"
             >
               <TrashIcon size={16} color={colors.danger} weight="bold" />
               <Text style={styles.dangerLabel}>アカウントを削除</Text>
@@ -143,6 +158,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           onClose={() => setContactOpen(false)}
         />
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -161,7 +177,9 @@ function Row({ label, value }: { label: string; value: string }) {
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.rowTrailing}>
-        {value !== "" && <Text style={styles.rowValue}>{value}</Text>}
+        {value !== "" && (
+          <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
+        )}
       </View>
     </View>
   );
@@ -230,6 +248,8 @@ function DeleteAccountConfirm({
                   onClose();
                 }}
                 disabled={deleting}
+                accessibilityRole="button"
+                accessibilityLabel="やめる"
                 style={styles.confirmCancel}
               >
                 <Text style={styles.confirmCancelLabel}>やめる</Text>
@@ -237,6 +257,8 @@ function DeleteAccountConfirm({
               <Pressable
                 onPress={handleConfirm}
                 disabled={deleting || !canDelete}
+                accessibilityRole="button"
+                accessibilityLabel="消す"
                 style={[styles.confirmConfirm, (deleting || !canDelete) && styles.confirmConfirmDisabled]}
               >
                 <Text style={styles.confirmConfirmLabel}>{deleting ? "削除中…" : "消す"}</Text>
@@ -286,9 +308,9 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
   },
   rowPressed: { backgroundColor: colors.surfaceHover },
-  rowLabel: { fontSize: fontSize.base, color: colors.ink },
-  rowTrailing: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  rowValue: { fontSize: fontSize.sm, color: colors.inkMuted },
+  rowLabel: { fontSize: fontSize.base, color: colors.ink, flexShrink: 0 },
+  rowTrailing: { flex: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.xs, marginLeft: spacing.md },
+  rowValue: { flexShrink: 1, fontSize: fontSize.sm, color: colors.inkMuted, textAlign: "right" },
   rowValueMono: { fontSize: fontSize.sm, color: colors.inkMuted, fontFamily: fonts.displayRegular },
   dangerRow: {
     flexDirection: "row",

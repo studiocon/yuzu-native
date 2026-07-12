@@ -63,7 +63,13 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       armedRef.current = false;
       pendingReleaseRef.current = false;
       setRecordingStartedAt(null);
-      recorderRef.current.stop().catch(() => {});
+      recorderRef.current
+        .stop()
+        .then(() =>
+          // iOS は録音セッション有効中は触覚を抑制するため、停止時に必ず解除する。
+          setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {})
+        )
+        .catch(() => {});
       setPhase("error");
       setStatusText("中断された、もう一度");
       haptics.warning();
@@ -113,6 +119,8 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     pendingReleaseRef.current = false;
     setRecordingStartedAt(null);
     await recorder.stop();
+    // iOS は録音セッション有効中は触覚を抑制するため、停止時に必ず解除する。
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
 
     const uri = recorder.uri;
     const durationMs = Date.now() - startedAtRef.current;

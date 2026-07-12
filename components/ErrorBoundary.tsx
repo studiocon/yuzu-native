@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Sentry from "@sentry/react-native";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -23,6 +24,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReload = () => {
+    haptics.tapLight();
     this.setState({ hasError: false });
   };
 

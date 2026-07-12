@@ -187,6 +187,10 @@ export default function LogScreen({
                   if (filter !== "all") haptics.selectionChanged();
                   setFilter("all");
                 }}
+                hitSlop={8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: filter === "all" }}
+                accessibilityLabel="すべて表示"
                 style={[styles.filterItem, filter === "all" && styles.filterItemActive]}
               >
                 <Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>ALL</Text>
@@ -196,6 +200,10 @@ export default function LogScreen({
                   if (filter !== "marked") haptics.selectionChanged();
                   setFilter("marked");
                 }}
+                hitSlop={8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: filter === "marked" }}
+                accessibilityLabel="MARK のみ表示"
                 style={[styles.filterItem, filter === "marked" && styles.filterItemActive]}
               >
                 <Text style={[styles.filterLabel, filter === "marked" && styles.filterLabelActive]}>MARKED</Text>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { XIcon } from "phosphor-react-native";
 import { apiFetch } from "../lib/apiFetch";
@@ -80,6 +80,10 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <StatusBar hidden hideTransitionAnimation="none" />
+      {/* RN の Modal は別ネイティブウィンドウに描画され、root の SafeAreaProvider から inset を
+          正しく継承できないことがある（マウント順依存でヘッダーが Dynamic Island に隠れる事故）。
+          react-native-safe-area-context の推奨どおり、Modal 直下に新しい SafeAreaProvider を置く。 */}
+      <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
           <Text style={styles.headerLabel}>{step === "sent" ? "SENT" : "CONTACT"}</Text>
@@ -154,6 +158,8 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
               <Pressable
                 onPress={handleSubmit}
                 disabled={loading || !submittable}
+                accessibilityRole="button"
+                accessibilityLabel="送る"
                 style={({ pressed }) => [styles.primaryBtn, (loading || !submittable) && styles.primaryBtnDisabled, pressed && styles.primaryBtnPressed]}
               >
                 <Text style={styles.primaryBtnLabel}>{loading ? "送信中..." : "送る"}</Text>
@@ -165,6 +171,7 @@ export default function ContactScreen({ visible, defaultEmail, onClose }: Props)
         </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

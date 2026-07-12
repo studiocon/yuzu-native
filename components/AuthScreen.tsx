@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import * as haptics from "../lib/haptics";
 
 type Step = "email" | "code";
 
@@ -108,7 +109,10 @@ export default function AuthScreen({ onBack }: Props = {}) {
               </Pressable>
               {onBack && (
                 <Pressable
-                  onPress={onBack}
+                  onPress={() => {
+                    haptics.tapLight();
+                    onBack();
+                  }}
                   disabled={loading}
                   accessibilityRole="button"
                   accessibilityLabel="戻る"
@@ -148,7 +152,12 @@ export default function AuthScreen({ onBack }: Props = {}) {
                 <Text style={styles.buttonLabel}>{loading ? "確認中…" : "確認"}</Text>
               </Pressable>
               <Pressable
-                onPress={() => { setStep("email"); setCode(""); setError(""); }}
+                onPress={() => {
+                  haptics.tapLight();
+                  setStep("email");
+                  setCode("");
+                  setError("");
+                }}
                 disabled={loading}
                 accessibilityRole="button"
                 accessibilityLabel="メール入力に戻る"

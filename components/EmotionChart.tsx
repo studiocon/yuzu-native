@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { GestureResponderEvent, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Defs, Line as SvgLine, LinearGradient, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
 import { WEEKDAY_JA } from "../lib/streak";
@@ -38,13 +38,12 @@ function buildPaths(data: SentimentPoint[], width: number) {
   const posYs = data.map((d) => zero - Math.max(0, clamp(d.score)) * amp);
   const negYs = data.map((d) => zero - Math.min(0, clamp(d.score)) * amp);
 
-  const line = ys.map((y, i) => `${i === 0 ? "M" : "L"}${xs[i].toFixed(2)},${y.toFixed(2)}`).join("");
   const toArea = (vals: number[]) => {
     const body = vals.map((v, i) => `L${xs[i].toFixed(2)},${v.toFixed(2)}`).join("");
     return `M${xs[0].toFixed(2)},${zero}${body}L${xs[xs.length - 1].toFixed(2)},${zero}Z`;
   };
   const points = data.map((d, i) => ({ x: xs[i], y: ys[i], date: d.date, score: d.score }));
-  return { line, posArea: toArea(posYs), negArea: toArea(negYs), zero, points };
+  return { posArea: toArea(posYs), negArea: toArea(negYs), points };
 }
 
 function clampTooltipLeft(x: number, width: number): number {
@@ -125,10 +124,8 @@ export default function EmotionChart({ data }: { data: SentimentPoint[] }) {
                 <Stop offset="1" stopColor={SENTIMENT_NEG} stopOpacity={0.62} />
               </LinearGradient>
             </Defs>
-            <SvgLine x1={0} y1={paths.zero} x2={width} y2={paths.zero} stroke={colors.inkMuted} strokeDasharray="4 4" strokeWidth={1} />
             <Path d={paths.posArea} fill="url(#pos)" />
             <Path d={paths.negArea} fill="url(#neg)" />
-            <Path d={paths.line} stroke={colors.ink} strokeOpacity={0.3} strokeWidth={1.5} fill="none" />
             {activePoint && <Circle cx={activePoint.x} cy={activePoint.y} r={5} fill={colors.ink} />}
           </Svg>
         </Pressable>
@@ -170,11 +167,17 @@ export function EmotionSection({ data }: Props) {
           <View style={[styles.filterItem, styles.filterItemActive]}>
             <Text style={[styles.filterLabel, styles.filterLabelActive]}>MONTH</Text>
           </View>
-          <Pressable onPress={handleAllPress} style={styles.filterItem}>
+          <Pressable
+            onPress={handleAllPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="ALL（近日対応）"
+            style={styles.filterItem}
+          >
             <Text style={styles.filterLabel}>ALL</Text>
             {tooltipOpen && (
-              <View style={styles.tooltip}>
-                <Text style={styles.tooltipLabel}>COMING SOON</Text>
+              <View style={styles.tooltip} pointerEvents="none">
+                <Text style={styles.tooltipLabel} numberOfLines={1}>COMING SOON</Text>
               </View>
             )}
           </Pressable>
@@ -221,6 +224,16 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.widest,
   },
   filterLabelActive: { color: colors.ink },
-  tooltip: { position: "absolute", top: -28, right: 0, backgroundColor: colors.ink, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4 },
+  tooltip: {
+    position: "absolute",
+    top: -32,
+    right: -8,
+    width: 112,
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
   tooltipLabel: { fontFamily: fonts.displayBold, fontSize: 9, color: colors.yuzuWhite, letterSpacing: 0.6 },
 });
