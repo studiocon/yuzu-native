@@ -58,7 +58,15 @@ export default function EmotionChart({ data }: { data: SentimentPoint[] }) {
   const [selected, setSelected] = useState<number | null>(null);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
-  const paths = useMemo(() => (width > 0 ? buildPaths(data, width) : null), [data, width]);
+  // data.length < 2 のガードは後段の early return にもあるが、useMemo はその手前で
+  // 無条件に走るため、ここでも同じ条件を課さないと buildPaths が空配列で呼ばれて
+  // toArea 内の xs[0].toFixed(2) が undefined に対して例外を投げる（投稿0件でINSIGHTタブを
+  // 開いた直後にクラッシュしていた実バグ。Sentry issue: TypeError: Cannot read property
+  // 'toFixed' of undefined, in toArea/buildPaths）。
+  const paths = useMemo(
+    () => (width > 0 && data.length >= 2 ? buildPaths(data, width) : null),
+    [data, width],
+  );
 
   useEffect(() => setSelected(null), [data]);
   useEffect(() => {
