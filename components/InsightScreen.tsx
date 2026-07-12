@@ -12,6 +12,7 @@ import WordBubbleMap, { WordBubbleMapSkeleton } from "./WordBubbleMap";
 import RecurringThemes, { RecurringThemesSkeleton } from "./RecurringThemes";
 import ReportCard, { ReportCardSkeleton } from "./ReportCard";
 import ReportDetailModal from "./ReportDetailModal";
+import { isReportUnread, loadSeenKeys, markReportSeen, saveSeenKeys } from "../lib/reportSeen";
 import type { Post } from "../lib/types";
 import type { HeatmapCell, ReportMeta, Theme, WordFreq } from "../lib/insightTypes";
 
@@ -28,6 +29,20 @@ type Props = {
 
 export default function InsightScreen({ posts, scores, words }: Props) {
   const [openReport, setOpenReport] = useState<string | null>(null);
+
+  // 既読 periodKey の集合（null=未ロード。未ロード中はチラつき防止のため未読バッジを出さない）。
+  const [seenKeys, setSeenKeys] = useState<Set<string> | null>(null);
+  // ストレージ読み出し自体が完了したか（seenKeys が null のままでも「未ロード」と
+  // 「読んだ結果が null＝要seed」を区別する必要がある。ref だと読み出し結果が null の場合
+  // setSeenKeys(null) が前回と同値のため再レンダーが起きず、下の seed effect の再評価も
+  // 起きないことがあるため、必ず再レンダーを起こす state として持つ）。
+  const [seenLoaded, setSeenLoaded] = useState(false);
+  useEffect(() => {
+    loadSeenKeys().then((keys) => {
+      setSeenLoaded(true);
+      setSeenKeys(keys);
+    });
+  }, []);
 
   const emotionData = useMemo(() => {
     const cutoff = Date.now() - SENTIMENT_WINDOW_MS;
@@ -69,6 +84,21 @@ export default function InsightScreen({ posts, scores, words }: Props) {
     () => (reportsData ?? []).filter((m) => !m.generated && m.postCount > 0).length,
     [reportsData],
   );
+
+  // 既読ストレージが未作成（＝キー未作成で null）だった場合の初期シード。
+  // レポート一覧・ストレージ読み出しの両方が確定した最初のタイミングで、現在 generated な
+  // 全 periodKey を既読として書き込む。狙い: 機能追加アップデート直後に既存レポートが
+  // 全部 NEW になるのを防ぐ（新規ユーザーはレポートが無いので空 seed で無害）。
+  const seedFiredRef = useRef(false);
+  useEffect(() => {
+    if (seedFiredRef.current) return;
+    if (reportsData === null) return;
+    if (!seenLoaded || seenKeys !== null) return;
+    seedFiredRef.current = true;
+    const initial = new Set(reportsData.filter((m) => m.generated).map((m) => m.periodKey));
+    saveSeenKeys(initial).catch(() => {});
+    setSeenKeys(initial);
+  }, [reportsData, seenLoaded, seenKeys]);
 
   // yuzu-app の InsightView と同じく、未生成かつ投稿ありのレポートを背景で先読み生成する
   // （fire-and-forget POST。サーバは即 202 を返しバックグラウンドで生成を続ける）。
@@ -151,7 +181,22 @@ export default function InsightScreen({ posts, scores, words }: Props) {
         ) : (
           <View style={{ gap: spacing.md }}>
             {reportsData.map((meta) => (
-              <ReportCard key={meta.periodKey} meta={meta} onPress={() => setOpenReport(meta.periodKey)} />
+              <ReportCard
+                key={meta.periodKey}
+                meta={meta}
+                unread={seenKeys !== null && isReportUnread(meta, seenKeys)}
+                onPress={() => {
+                  setOpenReport(meta.periodKey);
+                  if (seenKeys !== null && isReportUnread(meta, seenKeys)) {
+                    setSeenKeys((prev) => {
+                      const next = new Set(prev ?? []);
+                      next.add(meta.periodKey);
+                      return next;
+                    });
+                    markReportSeen(meta.periodKey).catch(() => {});
+                  }
+                }}
+              />
             ))}
           </View>
         )}

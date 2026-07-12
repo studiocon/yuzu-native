@@ -49,7 +49,15 @@ function buildSparkPaths(series: { score: number }[]) {
 }
 
 // yuzu-app の ReportCard.tsx を移植。
-export default function ReportCard({ meta, onPress }: { meta: ReportMeta; onPress: () => void }) {
+export default function ReportCard({
+  meta,
+  unread,
+  onPress,
+}: {
+  meta: ReportMeta;
+  unread?: boolean;
+  onPress: () => void;
+}) {
   const kindLabel = meta.kind === "week" ? "WEEK" : "MONTH";
   const span = formatPeriodRange(meta.rangeStart, meta.rangeEnd, meta.kind);
   const series = meta.payload?.sentimentSeries ?? [];
@@ -66,13 +74,14 @@ export default function ReportCard({ meta, onPress }: { meta: ReportMeta; onPres
         onPress();
       }}
       accessibilityRole="button"
-      accessibilityLabel={`${kindLabel} ${span} のレポートを開く`}
+      accessibilityLabel={unread ? `${kindLabel} ${span} の未読レポートを開く` : `${kindLabel} ${span} のレポートを開く`}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
       {edgeColor && <View style={[styles.edge, { backgroundColor: edgeColor }]} />}
       <View style={styles.head}>
         <Text style={[styles.kind, meta.kind === "month" && styles.kindFilled]}>{kindLabel}</Text>
         <Text style={styles.span}>{span}</Text>
+        {unread && <Text style={styles.newBadge}>NEW</Text>}
       </View>
       {meta.headline && <Text style={styles.headline} numberOfLines={2}>{meta.headline}</Text>}
       {meta.topics && meta.topics.length > 0 && (
@@ -136,6 +145,17 @@ const styles = StyleSheet.create({
   },
   kindFilled: { backgroundColor: colors.ink, color: colors.yuzuWhite },
   span: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: colors.inkMuted },
+  newBadge: {
+    marginLeft: "auto",
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: colors.ink,
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+    backgroundColor: colors.yuzuYellow,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
   headline: { fontSize: fontSize.base, fontWeight: "700", color: colors.ink },
   topics: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   chip: { backgroundColor: colors.surfaceHover, borderRadius: 2, paddingHorizontal: 8, paddingVertical: 3 },

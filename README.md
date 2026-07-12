@@ -151,14 +151,17 @@ UX改善8件+sweep（触覚・SafeArea・チャート統一・アニメーショ
 - [ ] LOG 詳細の LENGTH / DAY / CHARS ラベルが2行に折り返さないか
 - [ ] LOG 詳細で MARK を押しても本文・声紋アニメーションが再生されない（再リビールしない）か
 
-設定画面にリマインダー機能を追加（`lib/reminder.ts`、`components/SettingsScreen.tsx`）。トグルON時に `expo-notifications` で通知権限をリクエストし、許可されれば毎日指定時刻に DAILY トリガーでローカル通知をスケジュールする。時刻選択は `@react-native-community/datetimepicker`（iOS: カスタムシート内 spinner、Android: ネイティブダイアログ）。通知・権限ダイアログ・ネイティブ時刻ピッカーが絡むため実機（またはExpo Go）での確認が必要:
+通知機能一式を追加。設定画面に「通知」サブ画面（`components/NotificationScreen.tsx`）を新設し、毎日リマインダー（`lib/reminder.ts`、トグル+時刻設定）とレポート通知（`lib/reportNotifications.ts`、毎週月曜8:00・毎月1日8:00 のローカル通知、1トグル）を集約。レポート一覧には未読バッジ（`lib/reportSeen.ts`、NEW ピル）を追加。通知・権限ダイアログ・ネイティブ時刻ピッカーが絡むため実機（またはExpo Go）での確認が必要:
 
-- [ ] トグルONで通知許可ダイアログが出て、許可すると指定時刻（デフォルト21:00）に通知が届くか
-- [ ] 通知を拒否した場合、トグルがONのままにならず「通知を許可しろ」が一瞬表示されるか
-- [ ] 時刻行をタップ→ iOS は spinner シートが開き「閉じる」で確定・閉じるか。Android はネイティブダイアログが開閉し、選択した時刻が反映されるか
+- [ ] 設定 →「通知」で NOTIFICATIONS 画面が開閉するか。リマインダーのトグル・時刻 picker（iOS: spinner シート、Android: ネイティブダイアログ）が移設後も動くか
+- [ ] リマインダーONで通知許可ダイアログが出て、許可すると指定時刻（デフォルト21:00）に毎日通知が届くか
+- [ ] 通知を拒否した場合、トグルがONのままにならず「通知を許可しろ」が一瞬表示されるか（リマインダー・レポート通知の両トグル）
 - [ ] 時刻変更後、翌日以降も新しい時刻に通知が届くか（同一 identifier で再スケジュールされているか）
-- [ ] トグルOFFで通知がキャンセルされ、以降届かなくなるか
+- [ ] リマインダーON + レポート通知ON の状態で `Notifications.getAllScheduledNotificationsAsync()` に3本（daily/weekly/monthly）並ぶか（cancelAll による相互消去バグ修正の確認）。片方をOFFにしてももう片方が残るか
+- [ ] レポート通知ONで毎週月曜8:00・毎月1日8:00 に通知が届くか（`getAllScheduledNotificationsAsync` の nextTriggerDate 目視でも代替可）
+- [ ] Android: OS の通知設定にチャンネル「リマインダー」「レポート」が別々に表示されるか
 - [ ] アプリを再起動しても設定（ON/OFF・時刻）が保持されるか（AsyncStorage永続化）
+- [ ] INSIGHT の REPORTS 一覧: 新しく生成されたレポートに NEW ピルが付き、タップで消え、アプリ再起動後も既読が保持されるか。機能追加後の初回起動では既存レポートが全部 NEW にならない（初期シード）か
 
 ## TestFlight 提出前チェックリスト
 

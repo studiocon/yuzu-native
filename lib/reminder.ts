@@ -5,6 +5,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
+import { ensureAndroidChannel, ensureNotificationHandler } from "./notifications";
+
+export { requestNotificationPermission } from "./notifications";
+
 const STORAGE_KEY = "yuzu.reminder.v1";
 const NOTIFICATION_IDENTIFIER = "yuzu-daily-reminder";
 const ANDROID_CHANNEL_ID = "reminder";
@@ -50,59 +54,27 @@ async function persistReminderSettings(settings: ReminderSettings): Promise<void
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-let handlerConfigured = false;
-
-// フォアグラウンド受信時の表示挙動。アプリ起動のたびではなく初回呼び出し時に一度だけ設定する。
-function ensureNotificationHandler(): void {
-  if (handlerConfigured) return;
-  handlerConfigured = true;
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
-}
-
-async function ensureAndroidChannel(): Promise<void> {
-  if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-    name: "リマインダー",
-    importance: Notifications.AndroidImportance.DEFAULT,
-  });
-}
-
-export async function requestNotificationPermission(): Promise<boolean> {
-  ensureNotificationHandler();
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
-  const requested = await Notifications.requestPermissionsAsync();
-  return requested.granted;
-}
-
 async function scheduleDailyReminder(hour: number, minute: number): Promise<void> {
   ensureNotificationHandler();
-  await ensureAndroidChannel();
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  await ensureAndroidChannel(ANDROID_CHANNEL_ID, "リマインダー");
+  await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDENTIFIER);
   await Notifications.scheduleNotificationAsync({
     identifier: NOTIFICATION_IDENTIFIER,
     content: {
       title: "YUZU",
       body: "今日はまだ話してない。話せ。",
-      ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : null),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
+      ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : null),
     },
   });
 }
 
 async function cancelDailyReminder(): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDENTIFIER);
 }
 
 // 設定を永続化し、有効なら通知を再スケジュール・無効ならキャンセルする。
