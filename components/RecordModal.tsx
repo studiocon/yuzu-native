@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Dimensions, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import type { AudioRecorder } from "expo-audio";
@@ -7,9 +7,15 @@ import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from "react-native-svg"
 import { MicrophoneIcon, MicrophoneSlashIcon, XIcon } from "phosphor-react-native";
 import { colors, fontSize, fonts, letterSpacing } from "../lib/theme";
 import type { WeekDay } from "../lib/streak";
+import type { Post } from "../lib/types";
+import { buildTickerEntries, CARVING_STEP_AT_MS, type TickerEntry } from "../lib/carvingStage";
 import { useCountUp } from "../lib/useCountUp";
 import FloatingDots from "./FloatingDots";
 import Waveform from "./Waveform";
+
+// CARVING タイトルの刻印演出は常にこの文字列を1文字ずつアニメーションする
+// （topStatus とは独立。isBusy 中は statusText が入らないため常に "CARVING" 表示で一致する）。
+const CARVING_CHARS = "CARVING".split("");
 
 // yuzu-app の lib/constants.ts MAX_RECORD_MS と同じ値を維持すること。
 // 初期リリースはボリューム抑制のため 1 分に制限。
@@ -43,6 +49,10 @@ type Props = {
   week: WeekDay[];
   totalMinutes: number;
   streak: number;
+  /** CARVING 中のティッカーに流す過去 LOG。空/未指定なら FloatingDots にフォールバック。 */
+  pastLogs?: Post[];
+  /** CARVING 完了後に刻まれる番号。null/未指定なら NEXT ステップ自体を出さない。 */
+  nextIndex?: number | null;
   onPressIn: () => void;
   onPressOut: () => void;
   onClose: () => void;
@@ -105,6 +115,8 @@ function ModalBody({
   week,
   totalMinutes,
   streak,
+  pastLogs,
+  nextIndex,
   onPressIn,
   onPressOut,
   onClose,
@@ -114,6 +126,19 @@ function ModalBody({
   const isBusy = phase === "carving";
   const isCarved = phase === "carved";
   const isIdleHero = phase === "idle" && !permissionDenied && statusText === "";
+
+  // CARVING 演出（刻印タイトル・ステップ進行・ティッカー）はすべてこのフラグに従う。
+  // IndexDetailModal と同じパターンで一度だけ取得し、子コンポーネントに配る。
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (mounted) setReduceMotion(v);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const [promptShown, setPromptShown] = useState(false);
   useEffect(() => {
@@ -215,13 +240,18 @@ function ModalBody({
         </View>
       ) : (
         <View style={[styles.speakView, { paddingTop: insets.top + 24 }]}>
-          {topStatus !== "" && <Text style={[styles.speakTop, isBusy && styles.speakTopBusy]}>{topStatus}</Text>}
+          {isBusy ? (
+            <CarvedTitle reduceMotion={reduceMotion} />
+          ) : (
+            topStatus !== "" && <Text style={styles.speakTop}>{topStatus}</Text>
+          )}
           {isRecording && <Text style={styles.timer}>{formatCountdown(remainingMs)}</Text>}
+          {isBusy && <CarvingSteps nextIndex={nextIndex} reduceMotion={reduceMotion} />}
 
           <View style={styles.stage}>
             {phase === "idle" && <FloatingDots />}
             {isRecording && <Waveform recorder={recorder} />}
-            {isBusy && <Spinner />}
+            {isBusy && <CarvingStage pastLogs={pastLogs} reduceMotion={reduceMotion} />}
           </View>
 
           <View style={[styles.bottom, { paddingBottom: 80 + insets.bottom }]}>
@@ -314,15 +344,201 @@ function MicButton({
   );
 }
 
-function Spinner() {
-  const spin = useRef(new Animated.Value(0)).current;
+// CARVING タイトル：「CARVING」を1文字ずつ刻印するように opacity/translateY を stagger させる。
+// 文字数は固定なので常に全 Text をレンダリングし、アニメーションだけで出し分ける
+// （途中で文字数が変わるとレイアウトが跳ねるため）。
+function CarvedTitle({ reduceMotion }: { reduceMotion: boolean }) {
+  const anims = useRef(CARVING_CHARS.map(() => new Animated.Value(reduceMotion ? 1 : 0))).current;
+
   useEffect(() => {
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    if (reduceMotion) {
+      anims.forEach((v) => v.setValue(1));
+      return;
+    }
+    anims.forEach((v) => v.setValue(0));
+    const anim = Animated.stagger(
+      70,
+      anims.map((v) => Animated.timing(v, { toValue: 1, duration: 260, easing: Easing.out(Easing.ease), useNativeDriver: true })),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [reduceMotion, anims]);
+
+  return (
+    <View style={[styles.carvedTitleRow, styles.speakTopBusy]}>
+      {CARVING_CHARS.map((c, i) => {
+        const translateY = anims[i].interpolate({ inputRange: [0, 1], outputRange: [6, 0] });
+        return (
+          <Animated.Text key={i} style={[styles.carvedTitleChar, { opacity: anims[i], transform: [{ translateY }] }]}>
+            {c}
+          </Animated.Text>
+        );
+      })}
+    </View>
+  );
+}
+
+// CARVING ステップラベル：表示されるたびに 200ms でフェードインする。
+// step の切り替えごとに別要素として mount/unmount されるので、mount = 切替タイミングになる。
+function CarvingStepLabel({ reduceMotion, children }: { reduceMotion: boolean; children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(1);
+      return;
+    }
+    opacity.setValue(0);
+    const anim = Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true });
+    anim.start();
+    return () => anim.stop();
+  }, [reduceMotion, opacity]);
+  return <Animated.Text style={[styles.carvingStepLabel, { opacity }]}>{children}</Animated.Text>;
+}
+
+// step2（NEXT #NNN）で初めてマウントされる。マウント時に 0→nextIndex のカウントアップが走る。
+function CarvingNextLabel({ nextIndex }: { nextIndex: number }) {
+  const count = useCountUp(nextIndex, { durationMs: 800 });
+  return <>{`NEXT #${String(count).padStart(3, "0")}`}</>;
+}
+
+// CARVING ステップドット：アクティブなドットだけ白パルス（scale 1→1.25、1.2秒ループ）。
+function CarvingDot({ active, passed, reduceMotion }: { active: boolean; passed: boolean; reduceMotion: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!active || reduceMotion) {
+      scale.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.25, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
     loop.start();
     return () => loop.stop();
-  }, [spin]);
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  return <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />;
+  }, [active, reduceMotion, scale]);
+
+  const opacity = active ? 1 : passed ? 0.9 : 0.3;
+  return <Animated.View style={[styles.carvingDot, { opacity, transform: [{ scale }] }]} />;
+}
+
+// CARVING ステップ進行：ドット3つ（nextIndex が無ければ2つ）+ アクティブなステップのラベル。
+// マウント時に CARVING_STEP_AT_MS[1]/[2] で setTimeout を張るだけで、時間では最終ステップから
+// 進めない（実際の phase 変化だけが終端 —— 待ちが長引いてもステップは足踏みする）。
+function CarvingSteps({ nextIndex, reduceMotion }: { nextIndex: number | null | undefined; reduceMotion: boolean }) {
+  const hasStep2 = typeof nextIndex === "number";
+  const dotCount = hasStep2 ? 3 : 2;
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+
+  useEffect(() => {
+    setStep(0);
+    const timers: ReturnType<typeof setTimeout>[] = [
+      setTimeout(() => setStep(1), CARVING_STEP_AT_MS[1]),
+    ];
+    if (hasStep2) {
+      timers.push(setTimeout(() => setStep(2), CARVING_STEP_AT_MS[2]));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [hasStep2]);
+
+  return (
+    <View style={styles.carvingSteps}>
+      <View style={styles.carvingDots}>
+        {Array.from({ length: dotCount }).map((_, i) => (
+          <CarvingDot key={i} active={i === step} passed={i < step} reduceMotion={reduceMotion} />
+        ))}
+      </View>
+      {/* ステップ2（中間）はラベルを出さない。正典の状態ナラティブは RECORDING→CARVING→CARVED で
+          統一されており、中間状態語（SAVING 等）の挿入は語幹表の意味逸脱になる（copy-review 判定）。
+          進行はドットの前進だけで示す。 */}
+      {step === 2 && hasStep2 && (
+        <CarvingStepLabel reduceMotion={reduceMotion}>
+          <CarvingNextLabel nextIndex={nextIndex} />
+        </CarvingStepLabel>
+      )}
+    </View>
+  );
+}
+
+// CARVING センターステージ：過去 LOG があればティッカー、無ければ（オンボーディング直後の
+// 匿名フォールバック）既存の FloatingDots を表示する。
+function CarvingStage({ pastLogs, reduceMotion }: { pastLogs: Post[] | undefined; reduceMotion: boolean }) {
+  const entries = useMemo(() => buildTickerEntries(pastLogs ?? []), [pastLogs]);
+  if (entries.length === 0) return <FloatingDots />;
+  return <CarvingTicker entries={entries} reduceMotion={reduceMotion} />;
+}
+
+// #NNN + 抜粋を fade-in(400ms) → hold(1800ms) → fade-out(400ms) で繰り返す。
+// Animated.loop はコンテンツ差し替えができないため、start() のコールバックで次のエントリに
+// 進めてから同じ sequence を再度組み立てる自前ループにしている。
+function CarvingTicker({ entries, reduceMotion }: { entries: TickerEntry[]; reduceMotion: boolean }) {
+  const [entryIdx, setEntryIdx] = useState(0);
+  const anim = useRef(new Animated.Value(0)).current;
+  const mountedRef = useRef(true);
+  const firstRunRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const single = reduceMotion || entries.length <= 1;
+    if (single) {
+      if (reduceMotion) {
+        anim.setValue(1);
+        firstRunRef.current = false;
+        return;
+      }
+      anim.setValue(0);
+      const anim1 = Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: firstRunRef.current ? 600 : 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      });
+      firstRunRef.current = false;
+      anim1.start();
+      return () => anim1.stop();
+    }
+
+    anim.setValue(0);
+    const seq = Animated.sequence([
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: firstRunRef.current ? 600 : 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(anim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 0, duration: 400, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+    ]);
+    firstRunRef.current = false;
+    seq.start(({ finished }) => {
+      if (finished && mountedRef.current) {
+        setEntryIdx((i) => (i + 1) % entries.length);
+      }
+    });
+    return () => seq.stop();
+    // entryIdx が変わるたびに次のエントリの sequence を組み立て直す（= 自前ループの駆動）。
+  }, [entryIdx, entries.length, reduceMotion, anim]);
+
+  const entry = entries[entryIdx] ?? entries[0];
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+
+  return (
+    <Animated.View style={[styles.carvingTicker, { opacity: anim, transform: [{ translateY }] }]}>
+      <Text style={styles.carvingTickerIndex}>{`#${String(entry.index).padStart(3, "0")}`}</Text>
+      <Text style={styles.carvingTickerExcerpt} numberOfLines={2}>
+        {entry.excerpt}
+      </Text>
+    </Animated.View>
+  );
 }
 
 function CompleteView({
@@ -435,14 +651,34 @@ const styles = StyleSheet.create({
   micDisabled: { opacity: 0.55 },
   micPressed: { transform: [{ scale: 0.93 }] },
 
-  spinner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: "rgba(255,255,255,0.3)",
-    borderTopColor: "#fff",
+  // CARVING タイトル：既存 speakTop の見た目を保ちつつ per-char に分解する必要があるため、
+  // レイアウト（余白・センター配置）はここ、フォント指定は carvedTitleChar 側に分ける。
+  carvedTitleRow: { marginTop: 24, flexDirection: "row", justifyContent: "center", alignSelf: "stretch" },
+  carvedTitleChar: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xxl,
+    color: "#fff",
+    letterSpacing: fontSize.xxl * 0.02,
   },
+
+  carvingSteps: { marginTop: 16, alignItems: "center", gap: 10 },
+  carvingDots: { flexDirection: "row", alignItems: "center", gap: 8 },
+  carvingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
+  carvingStepLabel: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: "rgba(255,255,255,0.85)",
+    letterSpacing: fontSize.xs * letterSpacing.label,
+  },
+
+  carvingTicker: { alignItems: "center", gap: 6 },
+  carvingTickerIndex: {
+    fontFamily: fonts.displayBold,
+    fontSize: fontSize.xs,
+    color: "rgba(255,255,255,0.6)",
+    letterSpacing: fontSize.xs * letterSpacing.widest,
+  },
+  carvingTickerExcerpt: { fontSize: fontSize.base, color: "rgba(255,255,255,0.85)", textAlign: "center", maxWidth: 320 },
 
   limitView: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20, padding: 24 },
   limitCount: { fontFamily: fonts.displayBold, fontSize: fontSize.xxxl, color: "#fff", letterSpacing: fontSize.xxxl * letterSpacing.wider, opacity: 0.9 },

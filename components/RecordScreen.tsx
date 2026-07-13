@@ -11,6 +11,7 @@ import { useRecording, type TranscribeOutcome } from "../lib/useRecording";
 import { pickPrompt } from "../lib/prompts";
 import { clearPendingRecord, loadPendingRecord } from "../lib/pendingRecord";
 import { computeStreak } from "../lib/streak";
+import { deriveNextIndex } from "../lib/carvingStage";
 import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
 import type { Post } from "../lib/types";
@@ -315,6 +316,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   const { streak: clientStreak, week } = useMemo(() => computeStreak(logs), [logs]);
   const streak = Math.max(stats?.streak ?? 0, clientStreak);
   const totalMinutes = stats?.totalMinutes ?? 0;
+  const nextIndex = useMemo(() => deriveNextIndex(logs), [logs]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -359,6 +361,8 @@ export default function RecordScreen({ session }: { session: Session }) {
         week={week}
         totalMinutes={totalMinutes}
         streak={streak}
+        pastLogs={logs}
+        nextIndex={nextIndex}
         onPressIn={recording.handlePressIn}
         onPressOut={recording.handlePressOut}
         onClose={closeRecord}

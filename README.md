@@ -157,6 +157,16 @@ UX改善8件+sweep（触覚・SafeArea・チャート統一・アニメーショ
 - [ ] INSIGHT の REPORTS 一覧、カード同士の余白が詰まりすぎ・窮屈に見えないか（`paddingVertical` を spacing.md→sm に変更）
 - [ ] LOG 詳細の LENGTH / CHARS の値（`statValue`、36→28px + `adjustsFontSizeToFit`）が2行に折り返さなくなったか。長い録音時間・大きい文字数でも1行に収まるか
 
+CARVING 待機画面のリッチ化（`components/RecordModal.tsx`、`lib/carvingStage.ts`）。スピナーを廃止し、刻印タイプライター（タイトル1文字ずつ・センター配置）+ ステップドット + 過去LOGティッカー + NEXT #NNN カウントアップの一体演出に置き換えた。アニメーション・タイミング・アクセシビリティが絡むため実機（またはExpo Go）での確認が必要:
+
+- [ ] 実録音 → CARVING 突入でタイトル刻印 → ティッカー → ドット前進 → NEXT #NNN の順に演出が出るか
+- [ ] 高速完了（~3秒・良回線）でも演出途中から CompleteView へ違和感なく切り替わるか
+- [ ] 低速回線（15-20秒）でティッカー循環・ドットパルスが継続し、フリーズや演出の「偽完了」が無いか
+- [ ] carving 中に機内モードにすると error 表示へクリーンに遷移するか（アニメ残留・警告なし）
+- [ ] iOS「視差効果を減らす」ON でタイトル・ティッカーが静的表示になるか
+- [ ] 匿名オンボーディングの CARVING で FloatingDots フォールバック + ドット2つ構成（NEXT 非表示）になるか
+- [ ] マイクボタン無効表示・閉じる無効（carving 中）が従来どおりか
+
 通知機能一式を追加。設定画面に「通知」サブ画面（`components/NotificationScreen.tsx`）を新設し、毎日リマインダー（`lib/reminder.ts`、トグル+時刻設定）とレポート通知（`lib/reportNotifications.ts`、毎週月曜8:00・毎月1日8:00 のローカル通知、1トグル）を集約。レポート一覧には未読バッジ（`lib/reportSeen.ts`、NEW ピル）を追加。通知・権限ダイアログ・ネイティブ時刻ピッカーが絡むため実機（またはExpo Go）での確認が必要:
 
 - [ ] 設定 →「通知」で NOTIFICATIONS 画面が開閉するか。リマインダーのトグル・時刻 picker（iOS: spinner シート、Android: ネイティブダイアログ）が移設後も動くか
