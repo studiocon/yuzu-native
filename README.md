@@ -179,6 +179,12 @@ CARVING 待機画面のリッチ化（`components/RecordModal.tsx`、`lib/carvin
 - [ ] アプリを再起動しても設定（ON/OFF・時刻）が保持されるか（AsyncStorage永続化）
 - [ ] INSIGHT の REPORTS 一覧: 新しく生成されたレポートに NEW ピルが付き、タップで消え、アプリ再起動後も既読が保持されるか。機能追加後の初回起動では既存レポートが全部 NEW にならない（初期シード）か
 
+スプラッシュ画面をブランド化（`app.json` の `expo-splash-screen` プラグイン設定 + `assets/splash-icon.png`）。背景をデフォルトの `#FAFAF5` から YUZUイエロー（`#F5D84A`、`lib/theme.ts` の `colors.yuzuYellow` と一致）に変更し、画像をデフォルトの同心円プレースホルダーから「YUZU」ロゴ + タグライン「声を刻め」の合成画像（透過PNG）に差し替えた。この設定はネイティブの起動画面（Storyboard / drawable）としてビルド時に焼き込まれるため、Expo Go では確認できず実機または `expo prebuild` 後のシミュレータでの確認が必要:
+
+- [ ] 起動直後、JSバンドル読み込み前の段階でYUZUイエロー背景 + ロゴ + タグラインが表示されるか（白背景やデフォルトの同心円に戻っていないか）
+- [ ] ロゴ・タグラインが画面中央に適切なサイズで表示され、余白の偏りや欠けが無いか（Dynamic Island機種・小型機種の両方）
+- [ ] ダークモード設定時にも背景色・ロゴが意図通り（黒背景に切り替わらないか。`expo-splash-screen` はOSのダークモード用背景色を別途指定しない限りライトの値のみ使われる想定）
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
