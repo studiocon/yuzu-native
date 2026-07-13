@@ -156,10 +156,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 2,
   },
-  headline: { fontSize: fontSize.base, fontWeight: "700", color: colors.ink },
+  headline: { fontSize: fontSize.base, fontFamily: fonts.bodyBold, color: colors.ink },
   topics: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   chip: { backgroundColor: colors.surfaceHover, borderRadius: 2, paddingHorizontal: 8, paddingVertical: 3 },
-  chipLabel: { fontSize: fontSize.xs, color: colors.inkSecondary },
+  chipLabel: { fontFamily: fonts.bodyRegular, fontSize: fontSize.xs, color: colors.inkSecondary },
   spark: { marginTop: spacing.xs },
   pending: {
     fontFamily: fonts.displayBold,

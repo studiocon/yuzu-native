@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   heroCopy: { alignItems: "center", gap: spacing.sm },
   headline: {
     fontSize: fontSize.xxxl,
-    fontWeight: "700",
+    fontFamily: fonts.bodyBold,
     color: colors.ink,
     letterSpacing: fontSize.xxxl * letterSpacing.tight,
     textAlign: "center",
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   micPressed: { transform: [{ scale: 0.94 }] },
   loginLink: { padding: spacing.sm },
   loginLinkPressed: { opacity: 0.6 },
-  loginLinkLabel: { fontSize: fontSize.sm, color: colors.inkMuted },
+  loginLinkLabel: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkMuted },
 
   preview: {
     flex: 1,
@@ -207,9 +207,9 @@ const styles = StyleSheet.create({
   },
   stamp: { alignSelf: "flex-start", fontFamily: fonts.displayBlack, fontSize: 40, color: colors.ink, letterSpacing: -0.8 },
   card: { width: "100%", backgroundColor: colors.ink, borderRadius: radius.card, padding: 22 },
-  cardText: { fontSize: fontSize.base, lineHeight: fontSize.base * 1.75, color: colors.yuzuWhite },
+  cardText: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, lineHeight: fontSize.base * 1.75, color: colors.yuzuWhite },
   actions: { width: "100%", alignItems: "center", gap: spacing.md, marginTop: spacing.sm },
-  guide: { fontSize: fontSize.sm, color: colors.inkSecondary, textAlign: "center" },
+  guide: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkSecondary, textAlign: "center" },
   saveBtn: {
     width: "100%",
     height: 52,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   saveBtnPressed: { transform: [{ scale: 0.97 }] },
   saveBtnLabel: {
-    fontFamily: fonts.displayBlack,
+    fontFamily: fonts.bodyBold,
     fontSize: fontSize.base,
     color: colors.yuzuYellow,
     letterSpacing: fontSize.base * letterSpacing.wide,

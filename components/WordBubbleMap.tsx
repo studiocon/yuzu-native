@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { hierarchy, pack, type HierarchyCircularNode } from "d3-hierarchy";
 import Svg, { Circle, G, Text as SvgText } from "react-native-svg";
-import { colors, fontSize } from "../lib/theme";
+import { colors, fontSize, fonts } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 import { useSkeletonPulse } from "./Skeleton";
 import type { WordFreq } from "../lib/insightTypes";
@@ -132,7 +132,7 @@ export default function WordBubbleMap({ words }: { words: WordFreq[] }) {
                 textAnchor="middle"
                 dy={fontSizePx * 0.35}
                 fontSize={fontSizePx}
-                fontWeight="700"
+                fontFamily={fonts.bodyBold}
                 fill={colors.ink}
               >
                 {n.data.word}
@@ -147,5 +147,5 @@ export default function WordBubbleMap({ words }: { words: WordFreq[] }) {
 
 const styles = StyleSheet.create({
   empty: { paddingVertical: 40, alignItems: "center" },
-  emptyMsg: { fontSize: fontSize.base, color: colors.inkMuted },
+  emptyMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkMuted },
 });

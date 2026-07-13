@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   card: { gap: spacing.xs },
   head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   rank: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: colors.inkMuted },
-  title: { flex: 1, fontFamily: fonts.displayBold, fontSize: fontSize.base, color: colors.ink },
+  title: { flex: 1, fontFamily: fonts.bodyBold, fontSize: fontSize.base, color: colors.ink },
   titleLead: { fontSize: fontSize.lg },
   share: { fontFamily: fonts.displayBold, fontSize: fontSize.sm, color: colors.ink },
   shareLead: { fontSize: fontSize.base },
@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
   barFill: { height: "100%", backgroundColor: colors.yuzuYellow, borderRadius: 2 },
   barFillLead: { backgroundColor: colors.yuzuYellow },
   description: {
+    fontFamily: fonts.bodyRegular,
     fontSize: fontSize.sm,
     lineHeight: fontSize.sm * 1.6,
     color: colors.inkSecondary,

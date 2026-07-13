@@ -257,9 +257,9 @@ const styles = StyleSheet.create({
     color: colors.inkSecondary,
     letterSpacing: 10 * letterSpacing.wide,
   },
-  errorMsg: { fontSize: fontSize.base, color: colors.inkMuted },
-  emptyMsg: { fontSize: fontSize.base, color: colors.inkMuted },
+  errorMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkMuted },
+  emptyMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkMuted },
   reportsEmpty: { gap: spacing.xs, paddingVertical: spacing.lg },
   reportsEmptyHeadline: { fontFamily: fonts.displayBold, fontSize: fontSize.base, color: colors.ink, letterSpacing: fontSize.base * letterSpacing.wide },
-  reportsEmptyBody: { fontSize: fontSize.sm, color: colors.inkMuted },
+  reportsEmptyBody: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkMuted },
 });

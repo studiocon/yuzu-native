@@ -247,10 +247,10 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
   },
   rowPressed: { backgroundColor: colors.surfaceHover },
-  rowLabel: { fontSize: fontSize.base, color: colors.ink, flexShrink: 0 },
+  rowLabel: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.ink, flexShrink: 0 },
   rowTrailing: { flex: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.xs, marginLeft: spacing.md },
   rowValueMono: { fontSize: fontSize.sm, color: colors.inkMuted, fontFamily: fonts.displayRegular },
-  rowError: { fontSize: fontSize.sm, color: colors.danger },
+  rowError: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.danger },
   timeSheet: {
     width: "100%",
     backgroundColor: colors.surfaceCard,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   timeCloseBtn: { paddingVertical: spacing.md, paddingHorizontal: spacing.xl },
-  timeCloseLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.sm, color: colors.ink },
+  timeCloseLabel: { fontFamily: fonts.bodyBold, fontSize: fontSize.sm, color: colors.ink },
   confirmScrim: {
     flex: 1,
     backgroundColor: "rgba(26,26,46,0.55)",

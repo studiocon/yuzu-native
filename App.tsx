@@ -11,6 +11,8 @@ import { useFonts } from "@expo-google-fonts/unbounded/useFonts";
 import Unbounded_400Regular from "@expo-google-fonts/unbounded/400Regular/Unbounded_400Regular.ttf";
 import Unbounded_700Bold from "@expo-google-fonts/unbounded/700Bold/Unbounded_700Bold.ttf";
 import Unbounded_900Black from "@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf";
+import LINESeedJP_400Regular from "./assets/fonts/LINESeedJP_400Regular.ttf";
+import LINESeedJP_700Bold from "./assets/fonts/LINESeedJP_700Bold.ttf";
 import type { Session } from "@supabase/supabase-js";
 import { PostHogProvider } from "posthog-react-native";
 import { supabase } from "./lib/supabase";
@@ -40,6 +42,8 @@ function AppInner() {
     Unbounded_400Regular,
     Unbounded_700Bold,
     Unbounded_900Black,
+    LINESeedJP_400Regular,
+    LINESeedJP_700Bold,
   });
   // フォントは読み込み失敗・タイムアウト時も OS 標準フォントへフォールバックして先に進める。
   const fontsReady = fontsLoaded || !!fontError || startupTimedOut;

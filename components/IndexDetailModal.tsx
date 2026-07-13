@@ -338,6 +338,7 @@ const styles = StyleSheet.create({
   statValue: { fontFamily: fonts.displayBlack, fontSize: 28, color: colors.yuzuWhite },
   textBlock: { gap: 14 },
   para: {
+    fontFamily: fonts.bodyRegular,
     fontSize: fontSize.lg,
     lineHeight: fontSize.lg * 1.85,
     color: "rgba(255,255,255,0.92)",

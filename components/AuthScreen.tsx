@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginTop: spacing.sm,
   },
-  sub: { fontSize: fontSize.base, color: colors.inkSecondary, textAlign: "center", lineHeight: fontSize.base * 1.6 },
+  sub: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkSecondary, textAlign: "center", lineHeight: fontSize.base * 1.6 },
   input: {
     width: "100%",
     borderWidth: 1,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textAlign: "center",
   },
-  error: { color: colors.danger, fontSize: fontSize.sm },
+  error: { fontFamily: fonts.bodyRegular, color: colors.danger, fontSize: fontSize.sm },
   button: {
     backgroundColor: colors.ink,
     borderRadius: radius.button,
@@ -221,9 +221,9 @@ const styles = StyleSheet.create({
   buttonPressed: { transform: [{ scale: 0.97 }] },
   buttonLabel: {
     color: colors.yuzuWhite,
-    fontFamily: fonts.displayBold,
+    fontFamily: fonts.bodyBold,
     fontSize: fontSize.sm,
     letterSpacing: fontSize.sm * letterSpacing.wider,
   },
-  back: { fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.xs },
+  back: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.xs },
 });

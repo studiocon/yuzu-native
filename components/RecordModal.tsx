@@ -243,7 +243,9 @@ function ModalBody({
           {isBusy ? (
             <CarvedTitle reduceMotion={reduceMotion} />
           ) : (
-            topStatus !== "" && <Text style={styles.speakTop}>{topStatus}</Text>
+            topStatus !== "" && (
+              <Text style={[styles.speakTop, topStatus === "RECORDING" && styles.speakTopEn]}>{topStatus}</Text>
+            )
           )}
           {isRecording && <Text style={styles.timer}>{formatCountdown(remainingMs)}</Text>}
           {isBusy && <CarvingSteps nextIndex={nextIndex} reduceMotion={reduceMotion} />}
@@ -624,17 +626,19 @@ const styles = StyleSheet.create({
   speakView: { flex: 1, width: "100%", alignItems: "center", paddingHorizontal: 20 },
   speakTop: {
     marginTop: 24,
-    fontFamily: fonts.displayBold,
+    fontFamily: fonts.bodyBold,
     fontSize: fontSize.xxl,
     color: "#fff",
     letterSpacing: fontSize.xxl * 0.02,
     alignSelf: "stretch",
   },
+  // "RECORDING" 等の英語状態ラベルのみ Unbounded に戻す（topStatus は基本的に日本語メッセージ）。
+  speakTopEn: { fontFamily: fonts.displayBold },
   speakTopBusy: { opacity: 0.7 },
   timer: { marginTop: 4, fontSize: fontSize.xl, color: "rgba(255,255,255,0.85)", alignSelf: "stretch", letterSpacing: fontSize.xl * letterSpacing.wide },
   stage: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center", minHeight: 240 },
   bottom: { width: "100%", alignItems: "center", gap: 28 },
-  promptText: { fontSize: 28, lineHeight: 28 * 1.35, fontWeight: "700", color: "#fff", textAlign: "center", maxWidth: 320 },
+  promptText: { fontSize: 28, lineHeight: 28 * 1.35, fontFamily: fonts.bodyBold, color: "#fff", textAlign: "center", maxWidth: 320 },
   remaining: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: "rgba(255,255,255,0.5)", letterSpacing: fontSize.xs * letterSpacing.label },
 
   micWrap: { width: 96, height: 96, alignItems: "center", justifyContent: "center" },
@@ -678,21 +682,21 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     letterSpacing: fontSize.xs * letterSpacing.widest,
   },
-  carvingTickerExcerpt: { fontSize: fontSize.base, color: "rgba(255,255,255,0.85)", textAlign: "center", maxWidth: 320 },
+  carvingTickerExcerpt: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: "rgba(255,255,255,0.85)", textAlign: "center", maxWidth: 320 },
 
   limitView: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20, padding: 24 },
   limitCount: { fontFamily: fonts.displayBold, fontSize: fontSize.xxxl, color: "#fff", letterSpacing: fontSize.xxxl * letterSpacing.wider, opacity: 0.9 },
-  limitMsg: { fontSize: fontSize.lg, lineHeight: fontSize.lg * 1.7, color: "rgba(255,255,255,0.75)", textAlign: "center" },
+  limitMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.lg, lineHeight: fontSize.lg * 1.7, color: "rgba(255,255,255,0.75)", textAlign: "center" },
 
   completeView: { flex: 1, width: "100%", alignItems: "center", paddingHorizontal: 24, gap: 28 },
   completeStamp: { fontFamily: fonts.displayBlack, fontSize: 40, color: "#fff", letterSpacing: -0.8 },
   completeIndex: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: "#fff", marginTop: -16 },
   completeCard: { width: "100%", maxWidth: 420, backgroundColor: colors.ink, borderRadius: 2, padding: 22 },
-  completeText: { fontSize: fontSize.base, lineHeight: fontSize.base * 1.75, color: "#fff" },
+  completeText: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, lineHeight: fontSize.base * 1.75, color: "#fff" },
   streakBlock: { width: "100%", maxWidth: 420, alignItems: "center", gap: 16 },
   streakWeek: { flexDirection: "row", justifyContent: "space-between", width: "100%", gap: 4 },
   streakDay: { flex: 1, alignItems: "center", gap: 6 },
-  streakDayLabel: { fontSize: fontSize.xs, color: "rgba(255,255,255,0.85)" },
+  streakDayLabel: { fontFamily: fonts.bodyRegular, fontSize: fontSize.xs, color: "rgba(255,255,255,0.85)" },
   streakCheck: {
     width: 30,
     height: 30,
@@ -720,5 +724,5 @@ const styles = StyleSheet.create({
   completeStatValue: { fontFamily: fonts.displayBlack, fontSize: 44, color: "#fff", lineHeight: 44 },
   backBtn: { backgroundColor: "#fff", paddingVertical: 14, paddingHorizontal: 36, borderRadius: 4 },
   backBtnPressed: { transform: [{ scale: 0.97 }] },
-  backBtnLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.sm, color: colors.ink, letterSpacing: fontSize.sm * letterSpacing.wider },
+  backBtnLabel: { fontFamily: fonts.bodyBold, fontSize: fontSize.sm, color: colors.ink, letterSpacing: fontSize.sm * letterSpacing.wider },
 });

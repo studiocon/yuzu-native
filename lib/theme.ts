@@ -62,13 +62,14 @@ export const letterSpacing = {
 } as const;
 
 // Unbounded＝英字・ロゴ・タブラベル・スタッツ数値・状態ラベル。
-// LINE Seed JP はネイティブ未バンドル（フォントファイル未取得）のため、
-// 日本語本文は当面システムフォント（San Francisco / Roboto）にフォールバックする。
+// LINE Seed JP＝日本語UI・本文・タグライン（yuzu-app DESIGN.md §4 と同じ役割分担）。
+// App/TTF（App向け最適化メトリクス）版の Regular/Bold のみバンドル。
 export const fonts = {
   displayBlack: "Unbounded_900Black", // ロゴ
   displayBold: "Unbounded_700Bold", // タグライン・ラベル・ボタン・スタッツ数値
   displayRegular: "Unbounded_400Regular", // タイムスタンプ等
-  body: undefined, // 未指定 = OS 標準（System / Roboto）
+  bodyRegular: "LINESeedJP_400Regular", // 日本語本文
+  bodyBold: "LINESeedJP_700Bold", // 日本語タグライン・強調見出し
 } as const;
 
 // CSS の cubic-bezier と同じ4値。react-native の Easing.bezier(...) にそのまま渡せる。

@@ -62,6 +62,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   message: {
+    fontFamily: fonts.bodyRegular,
     fontSize: fontSize.base,
     color: colors.inkSecondary,
     textAlign: "center",

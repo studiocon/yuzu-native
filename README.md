@@ -185,6 +185,14 @@ CARVING 待機画面のリッチ化（`components/RecordModal.tsx`、`lib/carvin
 - [ ] ロゴ・タグラインが画面中央に適切なサイズで表示され、余白の偏りや欠けが無いか（Dynamic Island機種・小型機種の両方）
 - [ ] ダークモード設定時にも背景色・ロゴが意図通り（黒背景に切り替わらないか。`expo-splash-screen` はOSのダークモード用背景色を別途指定しない限りライトの値のみ使われる想定）
 
+LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts/` に新規バンドルし、`App.tsx` の `useFonts` に追加（`lib/theme.ts` の `fonts.bodyRegular` / `fonts.bodyBold`）。yuzu-app DESIGN.md §4 のフォント適用ルール（日本語UI・本文・タグライン＝LINE Seed JP、ロゴ・英語ラベル・数値・タイムスタンプ＝Unbounded）に合わせて `components/*.tsx` 全19ファイルの日本語 `<Text>` を洗い出して一括適用した。ロゴ「YUZU」・英語状態ラベル（"CARVING"/"LOG"等）・数値・タイムスタンプ表記はUnboundedのまま。フォント読み込み・グリフ描画のため実機（またはExpo Go）での確認が必要:
+
+- [ ] 主要画面（オンボーディング・録音・LOG一覧・LOG詳細・INSIGHT・レポート詳細・設定・認証・お問い合わせ・APIトークン・通知設定）で日本語本文がLINE Seed JPで表示されるか（OSのシステムフォントにフォールバックしていないか）
+- [ ] 英語状態ラベル・ロゴ・数値・タイムスタンプが従来通りUnboundedのままか（意図せずLINE Seed JPに変わっていないか）
+- [ ] `RecordModal.tsx` の録音中ステータス表示（`speakTop`）: 日本語エラーメッセージ（「マイクを許可しろ」等）はLINE Seed JP Bold、"RECORDING"のみUnboundedで出し分けられているか
+- [ ] `WordBubbleMap.tsx` の頻出語バブル内テキスト（`SvgText`、react-native-svg経由）がLINE Seed JP Boldで描画されるか（RNの`Text`とはフォント適用経路が異なるため個別確認）
+- [ ] フォント読み込み失敗時に `STARTUP_TIMEOUT_MS`（5秒）超過でも起動がフリーズせず先に進むか（`App.tsx` の既存フォールバック挙動の回帰確認）
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。

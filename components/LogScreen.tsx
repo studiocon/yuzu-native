@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.widest,
   },
   filterLabelActive: { color: colors.ink },
-  empty: { fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.md },
+  empty: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkMuted, paddingTop: spacing.md },
   skeletonList: { gap: spacing.md, paddingTop: spacing.sm },
   recordSkeletonCard: {
     gap: spacing.xs,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   logRowHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   logIndex: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: fontSize.xs * letterSpacing.wide },
   logDuration: { fontFamily: fonts.displayRegular, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: fontSize.xs * letterSpacing.wide },
-  logText: { fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
+  logText: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.ink, lineHeight: fontSize.base * 1.6 },
   voiceprint: { flexDirection: "row", alignItems: "flex-end", gap: 2, height: 20, marginTop: 2, opacity: 0.45 },
   voiceprintBar: { flex: 1, minWidth: 1, backgroundColor: colors.inkMuted },
 });

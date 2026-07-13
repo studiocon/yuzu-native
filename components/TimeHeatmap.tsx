@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     letterSpacing: 10 * letterSpacing.wide,
   },
   emptyWrap: { paddingVertical: spacing.xl, alignItems: "center" },
-  emptyMsg: { fontSize: fontSize.base, color: colors.inkMuted },
+  emptyMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.inkMuted },
   skeletonCol: { flex: 1, marginLeft: 2 },
   skeletonColFirst: { marginLeft: 0 },
   skeletonCell: { width: "100%", aspectRatio: 1, borderRadius: 2, backgroundColor: colors.divider },

@@ -201,10 +201,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pointTooltipDate: { fontFamily: fonts.displayBold, fontSize: 9, color: "rgba(255,255,255,0.6)" },
-  pointTooltipLabel: { fontFamily: fonts.displayBold, fontSize: 11, color: colors.yuzuWhite },
+  pointTooltipLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.yuzuWhite },
   empty: { height: CHART_H, alignItems: "center", justifyContent: "center", gap: spacing.xs },
   emptyLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.sm, color: colors.inkMuted, letterSpacing: fontSize.sm * letterSpacing.widest },
-  emptyMsg: { fontSize: fontSize.sm, color: colors.inkMuted },
+  emptyMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkMuted },
   section: { gap: 10, paddingTop: 44 },
   sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionTitle: {
