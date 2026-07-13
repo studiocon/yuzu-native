@@ -12,7 +12,7 @@ type Props = {
 export default function AppHeader({ title, onOpenSettings }: Props) {
   return (
     <View style={styles.row}>
-      <Text style={styles.title}>{title}.</Text>
+      <Text style={styles.title}>{title}</Text>
       <Pressable
         onPress={() => {
           haptics.tapLight();

@@ -151,6 +151,12 @@ UX改善8件+sweep（触覚・SafeArea・チャート統一・アニメーショ
 - [ ] LOG 詳細の LENGTH / DAY / CHARS ラベルが2行に折り返さないか
 - [ ] LOG 詳細で MARK を押しても本文・声紋アニメーションが再生されない（再リビールしない）か
 
+レイアウト微調整3件を追加。typecheck/lint/test のみで完了扱いのため実機確認が必要:
+
+- [ ] LOG / INSIGHT ヘッダーのページ名末尾のピリオドが削除されているか（正典 yuzu-app に合わせた）
+- [ ] INSIGHT の REPORTS 一覧、カード同士の余白が詰まりすぎ・窮屈に見えないか（`paddingVertical` を spacing.md→sm に変更）
+- [ ] LOG 詳細の LENGTH / CHARS の値（`statValue`、36→28px + `adjustsFontSizeToFit`）が2行に折り返さなくなったか。長い録音時間・大きい文字数でも1行に収まるか
+
 通知機能一式を追加。設定画面に「通知」サブ画面（`components/NotificationScreen.tsx`）を新設し、毎日リマインダー（`lib/reminder.ts`、トグル+時刻設定）とレポート通知（`lib/reportNotifications.ts`、毎週月曜8:00・毎月1日8:00 のローカル通知、1トグル）を集約。レポート一覧には未読バッジ（`lib/reportSeen.ts`、NEW ピル）を追加。通知・権限ダイアログ・ネイティブ時刻ピッカーが絡むため実機（またはExpo Go）での確認が必要:
 
 - [ ] 設定 →「通知」で NOTIFICATIONS 画面が開閉するか。リマインダーのトグル・時刻 picker（iOS: spinner シート、Android: ネイティブダイアログ）が移設後も動くか

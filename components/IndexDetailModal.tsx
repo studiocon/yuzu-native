@@ -207,19 +207,19 @@ export default function IndexDetailModal({ post, firstPostAt, score, topWords, o
               {lengthLabel !== null && (
                 <View style={styles.statCard}>
                   <Text style={styles.statLabel} numberOfLines={1}>LENGTH</Text>
-                  <Text style={styles.statValue}>{lengthLabel}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{lengthLabel}</Text>
                 </View>
               )}
               {dayLabel !== null && (
                 <View style={styles.statCard}>
                   <Text style={styles.statLabel} numberOfLines={1}>DAY</Text>
-                  <Text style={styles.statValue}>{dayLabel}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{dayLabel}</Text>
                 </View>
               )}
               {charsLabel !== null && (
                 <View style={styles.statCard}>
                   <Text style={styles.statLabel} numberOfLines={1}>CHARS</Text>
-                  <Text style={styles.statValue}>{charsLabel}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{charsLabel}</Text>
                 </View>
               )}
             </View>
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.xs * letterSpacing.wide,
     textTransform: "uppercase",
   },
-  statValue: { fontFamily: fonts.displayBlack, fontSize: 36, color: colors.yuzuWhite },
+  statValue: { fontFamily: fonts.displayBlack, fontSize: 28, color: colors.yuzuWhite },
   textBlock: { gap: 14 },
   para: {
     fontSize: fontSize.lg,

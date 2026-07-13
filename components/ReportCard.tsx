@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   card: {
     position: "relative",
     paddingLeft: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
