@@ -15,6 +15,7 @@ import { deriveNextIndex } from "../lib/carvingStage";
 import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
 import { loadLogsCache, saveLogsCache, type Stats } from "../lib/logsCache";
+import { hydrateRequestCache } from "../lib/requestCache";
 import type { Post } from "../lib/types";
 import type { WordFreq } from "../lib/insightTypes";
 import AppHeader from "./AppHeader";
@@ -162,6 +163,11 @@ export default function RecordScreen({ session }: { session: Session }) {
   // 復元しない（古い offset でのページネーションずれ防止。ネットワーク応答が来るまで
   // hasMore=false のまま＝無限スクロールは発火しない。LogScreen.handleEndReached 参照）。
   useEffect(() => {
+    // INSIGHT 系 GET（heatmap/themes/words/reports）の永続キャッシュもここで復元しておく
+    // （fire-and-forget。INSIGHT タブ初回マウント前に完了していれば即表示が効き、間に合わ
+    // なければ従来のネットワーク待ちに自然フォールバックする。requestCache 側でメモリに
+    // 既にあるキーは上書きしないため、ネットワーク応答とのレースも安全）。
+    hydrateRequestCache(session.user.id).catch(() => {});
     let cancelled = false;
     loadLogsCache(session.user.id).then((cached) => {
       if (cancelled || !mountedRef.current || networkLoadedRef.current || !cached) return;

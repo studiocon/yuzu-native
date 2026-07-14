@@ -202,6 +202,10 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] LOG のプルリフレッシュが従来通り動作し、キャッシュ追加後も二重更新やちらつきが無いか
 - [ ] LOG 詳細から開く WORDS 自動ハイライト（頻出語）が、起動直後の遅延後も正しく表示されるか（`RecordScreen.tsx` の `WORDS_FETCH_DELAY_MS`）
 - [ ] 21件以上の記録がある状態で起動直後にスクロールしても、キャッシュ由来の `nextOffset` 未設定により無限スクロールが誤発火しない（ネットワーク応答後は通常通り追加読み込みできる）か
+- [ ] コールドスタート後に INSIGHT タブを開いたとき、SIGNAL / WORDS / PATTERN / REPORTS の各セクションが前回起動時の内容で即表示され、その後ネットワーク応答で最新内容に差し替わるか（`requestCache` の AsyncStorage 永続化 + `RecordScreen` マウント時の `hydrateRequestCache`）
+- [ ] LOG ⇄ INSIGHT のタブ切替で REPORTS 一覧がスケルトンに戻らず、直近の内容がすぐ表示されるか（`InsightScreen` の reportsData を requestCache 対応にした分）
+- [ ] 別アカウントでログインし直したとき、前ユーザーの INSIGHT データ（heatmap/themes/words/reports）が一瞬でも表示されないか（`hydrateRequestCache` の userId 検証、`SIGNED_OUT` での `clearRequestCache` が AsyncStorage 側も消す）
+- [ ] レポート生成待ちの5秒ポーリング・未生成レポートの先読み POST・NEW バッジの初期シードに回帰が無いか（pregen と seed はキャッシュ由来の stale データでは発火せず、ネットワーク応答後にのみ発火するようゲートした）
 
 ## TestFlight 提出前チェックリスト
 
