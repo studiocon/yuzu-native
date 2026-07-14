@@ -14,6 +14,7 @@ import { computeStreak } from "../lib/streak";
 import { deriveNextIndex } from "../lib/carvingStage";
 import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
+import { loadLogsCache, saveLogsCache, type Stats } from "../lib/logsCache";
 import type { Post } from "../lib/types";
 import type { WordFreq } from "../lib/insightTypes";
 import AppHeader from "./AppHeader";
@@ -25,13 +26,9 @@ import SettingsScreen from "./SettingsScreen";
 import IndexDetailModal from "./IndexDetailModal";
 import RecordModal from "./RecordModal";
 
-type Stats = {
-  streak: number;
-  todayCount: number;
-  maxDaily: number;
-  totalCount: number;
-  totalMinutes: number;
-};
+// 起動直後の帯域を records 取得に譲るため、WORDS（INSIGHT 未訪問でも LOG から詳細を開ける
+// ようにする頻出語取得）は初回 fetchLogs 完了 or この遅延のどちらか早い方まで遅らせる。
+const WORDS_FETCH_DELAY_MS = 1000;
 
 type CarvedPost = { index: number; text: string };
 
@@ -59,6 +56,10 @@ export default function RecordScreen({ session }: { session: Session }) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [prompt, setPrompt] = useState(() => pickPrompt());
+  // fetchLogs のネットワーク応答が確定した（成功/失敗いずれか）ことを示す。logsLoaded は
+  // キャッシュ表示でも true になるため、WORDS 遅延の判定にはこちらを使う
+  // （帯域を records のネットワーク取得に譲る目的のため、キャッシュ即表示では早めない）。
+  const [logsNetworkSettled, setLogsNetworkSettled] = useState(false);
 
   const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
   const recording = useRecording({
@@ -69,11 +70,34 @@ export default function RecordScreen({ session }: { session: Session }) {
   const mountedRef = useRef(true);
   const listRef = useRef<FlatList<LogRowItem>>(null);
   const insets = useSafeAreaInsets();
+  // fetchLogs のレスポンスが setLogs まで到達したら true。以降、キャッシュ読み込みが遅れて
+  // 解決してもネットワークの新しい結果を古いキャッシュで上書きしないためのレース対策。
+  const networkLoadedRef = useRef(false);
+  // fetchLogs は毎回全項目を返すとは限らない（例: streak を含まない応答）ため、キャッシュ保存時に
+  // 直前の値へフォールバックできるよう最新の stats/firstPostAt を ref にも保持しておく。
+  const statsRef = useRef<Stats | null>(null);
+  const firstPostAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
+  useEffect(() => {
+    firstPostAtRef.current = firstPostAt;
+  }, [firstPostAt]);
 
   const scores = useSentimentScores(logs, API_BASE);
   // WORDS 自動ハイライト用の頻出語（INSIGHT タブ未訪問でも LOG から詳細を開けるよう、ここで取得しておく）。
+  // 起動直後の帯域を records 取得に譲るため、初回 fetchLogs 完了 or 一定時間のどちらか早い方まで遅らせる。
+  const [wordsUrl, setWordsUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (logsNetworkSettled) {
+      setWordsUrl(`${API_BASE}/api/insights/words`);
+      return;
+    }
+    const timer = setTimeout(() => setWordsUrl(`${API_BASE}/api/insights/words`), WORDS_FETCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [logsNetworkSettled]);
   const words = useApiGet<WordFreq[]>(
-    `${API_BASE}/api/insights/words`,
+    wordsUrl,
     (r) => (Array.isArray(r.words) ? (r.words as WordFreq[]) : []),
   );
   const topWords = useMemo(() => new Set((words.data ?? []).map((w) => w.word)), [words.data]);
@@ -91,39 +115,67 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (!res.ok || !mountedRef.current) return;
       const data = await res.json();
       if (!mountedRef.current) return;
+      // ネットワーク応答が届いた以上、後から解決するキャッシュ読み込みでこれを上書きさせない。
+      networkLoadedRef.current = true;
       const posts = Array.isArray(data?.posts) ? data.posts : [];
-      setLogs(
-        posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number; char_count?: number }) => ({
-          id: p.id,
-          text: p.text,
-          index: p.index,
-          createdAt: p.createdAt,
-          marked: p.marked ?? false,
-          durationMs: p.durationMs ?? 0,
-          charCount: p.char_count ?? 0,
-        })),
-      );
+      const mapped: Post[] = posts.map((p: { id: string; text: string; index: number; createdAt: number; marked?: boolean; durationMs?: number; char_count?: number }) => ({
+        id: p.id,
+        text: p.text,
+        index: p.index,
+        createdAt: p.createdAt,
+        marked: p.marked ?? false,
+        durationMs: p.durationMs ?? 0,
+        charCount: p.char_count ?? 0,
+      }));
+      setLogs(mapped);
       setNextOffset(typeof data?.nextOffset === "number" ? data.nextOffset : null);
+      const nextFirstPostAt = typeof data?.firstPostAt === "number" ? data.firstPostAt : firstPostAtRef.current;
       if (typeof data?.firstPostAt === "number") setFirstPostAt(data.firstPostAt);
+      let nextStats: Stats | null = statsRef.current;
       if (typeof data?.streak === "number") {
-        setStats({
+        nextStats = {
           streak: data.streak,
           todayCount: data.todayCount ?? 0,
           maxDaily: data.maxDaily ?? 0,
           totalCount: typeof data.totalCount === "number" ? data.totalCount : 0,
           totalMinutes: typeof data.totalDurationMs === "number" ? Math.floor(data.totalDurationMs / 60000) : 0,
-        });
+        };
+        setStats(nextStats);
       }
+      saveLogsCache(session.user.id, { posts: mapped, stats: nextStats, firstPostAt: nextFirstPostAt }).catch(() => {});
     } catch {
       // 一覧取得失敗は録音フローを止めない。silent skip。
     } finally {
-      if (mountedRef.current) setLogsLoaded(true);
+      if (mountedRef.current) {
+        setLogsLoaded(true);
+        setLogsNetworkSettled(true);
+      }
     }
-  }, []);
+  }, [session.user.id]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  // 起動直後: 前回このアカウントでログインした際にキャッシュした LOG 先頭ページ・統計を
+  // ネットワークより先に表示する（stale-while-revalidate）。nextOffset はキャッシュから
+  // 復元しない（古い offset でのページネーションずれ防止。ネットワーク応答が来るまで
+  // hasMore=false のまま＝無限スクロールは発火しない。LogScreen.handleEndReached 参照）。
+  useEffect(() => {
+    let cancelled = false;
+    loadLogsCache(session.user.id).then((cached) => {
+      if (cancelled || !mountedRef.current || networkLoadedRef.current || !cached) return;
+      setLogs(cached.posts);
+      setStats(cached.stats);
+      setFirstPostAt(cached.firstPostAt);
+      setLogsLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // session.user.id は同一マウント中は不変（アカウント切替は必ず一度アンマウントを挟む）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ログイン直後: 未ログイン onboarding で退避した pendingRecord（AsyncStorage）を読み出して保存する。
   // Web（app/page.tsx:224-274）は POST 前に sessionStorage のキーを削除するが、ネイティブは

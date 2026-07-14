@@ -193,6 +193,16 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] `WordBubbleMap.tsx` の頻出語バブル内テキスト（`SvgText`、react-native-svg経由）がLINE Seed JP Boldで描画されるか（RNの`Text`とはフォント適用経路が異なるため個別確認）
 - [ ] フォント読み込み失敗時に `STARTUP_TIMEOUT_MS`（5秒）超過でも起動がフリーズせず先に進むか（`App.tsx` の既存フォールバック挙動の回帰確認）
 
+アプリ起動後の LOG 画面ローディング改善（`lib/logsCache.ts` 新規・`lib/requestCache.ts` 新規・`lib/useApiGet.ts` / `components/RecordScreen.tsx` / `App.tsx` 変更）。LOG 先頭ページ+統計を AsyncStorage にキャッシュして起動時に即表示する stale-while-revalidate、INSIGHT の heatmap/themes/words をモジュールメモリでキャッシュしてタブ切替時のスケルトン再表示を防ぐ SWR、WORDS 取得の起動時遅延を追加した。JSロジック中心だがキャッシュ表示→ネットワーク差し替えの見た目・タイミングは実機でしか確認できないため以下が必要:
+
+- [ ] コールドスタート時、前回起動時の LOG 一覧・RECORDS/MINUTES/STREAK がスケルトンを経ずに即表示され、その後ネットワーク応答で最新内容に差し替わるか（新規投稿があれば反映されるか）
+- [ ] 別アカウントでログインし直したとき、前ユーザーの LOG・統計が一瞬でも表示されないか（`loadLogsCache` の userId 検証、および `App.tsx` の `SIGNED_OUT` での `clearLogsCache`/`clearRequestCache`）
+- [ ] 初回起動（キャッシュ無し）でも従来通りスケルトン→表示の流れが崩れていないか
+- [ ] LOG ⇄ INSIGHT のタブ切替を繰り返したとき、SIGNAL（heatmap）/ PATTERN（themes）/ WORDS が毎回スケルトンに戻らず、直近の内容がすぐ表示されるか（裏で再取得され、内容が更新されるタイミングがあれば違和感が無いか）
+- [ ] LOG のプルリフレッシュが従来通り動作し、キャッシュ追加後も二重更新やちらつきが無いか
+- [ ] LOG 詳細から開く WORDS 自動ハイライト（頻出語）が、起動直後の遅延後も正しく表示されるか（`RecordScreen.tsx` の `WORDS_FETCH_DELAY_MS`）
+- [ ] 21件以上の記録がある状態で起動直後にスクロールしても、キャッシュ由来の `nextOffset` 未設定により無限スクロールが誤発火しない（ネットワーク応答後は通常通り追加読み込みできる）か
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
