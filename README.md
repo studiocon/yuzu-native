@@ -193,6 +193,13 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] `WordBubbleMap.tsx` の頻出語バブル内テキスト（`SvgText`、react-native-svg経由）がLINE Seed JP Boldで描画されるか（RNの`Text`とはフォント適用経路が異なるため個別確認）
 - [ ] フォント読み込み失敗時に `STARTUP_TIMEOUT_MS`（5秒）超過でも起動がフリーズせず先に進むか（`App.tsx` の既存フォールバック挙動の回帰確認）
 
+録音の制限時間（`MAX_RECORD_MS`＝1分）到達時に自動で停止するよう `lib/useRecording.ts` に修正を入れた。従来は `RecordModal.tsx` のカウントダウン表示だけで、指を離さない限り実際の録音は止まらなかった不具合（1分を過ぎても録音が続く）を修正。`handlePressIn` で録音開始時に `setTimeout(MAX_RECORD_MS)` を張り、時間到達時点でまだ録音中（`armedRef`）なら `finishRecording()` を呼んで通常のリリース時と同じ CARVING 遷移に入る。バックグラウンド割り込み・手動リリース・アンマウントの各経路でタイマーを確実にクリアしている（多重発火・別セッションへの誤爆防止）。expo-audio の実録音挙動のため実機（またはExpo Go）での確認が必要:
+
+- [ ] 1分間長押しを維持したまま自然経過した場合、指を離さなくてもカウントダウンが0:00になった時点で自動的に録音が停止し CARVING に遷移するか（従来は録音が続いてしまっていた）
+- [ ] 自動停止時も通常のリリース時と同じ haptics（tapLight）・文字起こしフローが動くか
+- [ ] 1分未満で自分から指を離した場合の挙動（既存の手動停止フロー）に回帰が無いか
+- [ ] 録音を自動停止後、間を置かず再度長押しして新しい録音を始めた場合、古いタイマーが新しい録音を誤って早期停止させないか
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
