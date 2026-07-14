@@ -10,7 +10,7 @@ import { apiFetch } from "./apiFetch";
 import { API_BASE } from "./config";
 import * as haptics from "./haptics";
 import { track } from "./analytics";
-import type { ModalPhase } from "../components/RecordModal";
+import { MAX_RECORD_MS, type ModalPhase } from "../components/RecordModal";
 
 export type TranscribeOutcome =
   | { kind: "text"; text: string; durationMs: number }
@@ -40,6 +40,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
   const startedAtRef = useRef(0);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
   const mountedRef = useRef(true);
@@ -53,8 +54,16 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      if (autoStopTimerRef.current !== null) clearTimeout(autoStopTimerRef.current);
     };
   }, []);
+
+  function clearAutoStopTimer() {
+    if (autoStopTimerRef.current !== null) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+  }
 
   // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する。
   useEffect(() => {
@@ -62,6 +71,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       if (next === "active" || !armedRef.current) return;
       armedRef.current = false;
       pendingReleaseRef.current = false;
+      clearAutoStopTimer();
       setRecordingStartedAt(null);
       recorderRef.current
         .stop()
@@ -100,6 +110,12 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     onRecordingStart?.();
     setRecordingStartedAt(startedAtRef.current);
     haptics.tapMedium();
+    // 制限時間（MAX_RECORD_MS）に達したら、指を離していなくても自動で CARVING に入る。
+    clearAutoStopTimer();
+    autoStopTimerRef.current = setTimeout(() => {
+      autoStopTimerRef.current = null;
+      if (armedRef.current) finishRecording();
+    }, MAX_RECORD_MS);
 
     if (pendingReleaseRef.current) {
       await finishRecording();
@@ -117,6 +133,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   async function finishRecording() {
     armedRef.current = false;
     pendingReleaseRef.current = false;
+    clearAutoStopTimer();
     setRecordingStartedAt(null);
     await recorder.stop();
     // iOS は録音セッション有効中は触覚を抑制するため、停止時に必ず解除する。
@@ -213,6 +230,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   function reset() {
     armedRef.current = false;
     pendingReleaseRef.current = false;
+    clearAutoStopTimer();
     setPhase("idle");
     setStatusText("");
     setPermissionDenied(false);
