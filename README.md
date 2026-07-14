@@ -193,6 +193,13 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] `WordBubbleMap.tsx` の頻出語バブル内テキスト（`SvgText`、react-native-svg経由）がLINE Seed JP Boldで描画されるか（RNの`Text`とはフォント適用経路が異なるため個別確認）
 - [ ] フォント読み込み失敗時に `STARTUP_TIMEOUT_MS`（5秒）超過でも起動がフリーズせず先に進むか（`App.tsx` の既存フォールバック挙動の回帰確認）
 
+録音の制限時間（`MAX_RECORD_MS`＝1分）到達時に自動で停止するよう `lib/useRecording.ts` に修正を入れた。従来は `RecordModal.tsx` のカウントダウン表示だけで、指を離さない限り実際の録音は止まらなかった不具合（1分を過ぎても録音が続く）を修正。`handlePressIn` で録音開始時に `setTimeout(MAX_RECORD_MS)` を張り、時間到達時点でまだ録音中（`armedRef`）なら `finishRecording()` を呼んで通常のリリース時と同じ CARVING 遷移に入る。バックグラウンド割り込み・手動リリース・アンマウントの各経路でタイマーを確実にクリアしている（多重発火・別セッションへの誤爆防止）。expo-audio の実録音挙動のため実機（またはExpo Go）での確認が必要:
+
+- [ ] 1分間長押しを維持したまま自然経過した場合、指を離さなくてもカウントダウンが0:00になった時点で自動的に録音が停止し CARVING に遷移するか（従来は録音が続いてしまっていた）
+- [ ] 自動停止時も通常のリリース時と同じ haptics（tapLight）・文字起こしフローが動くか
+- [ ] 1分未満で自分から指を離した場合の挙動（既存の手動停止フロー）に回帰が無いか
+- [ ] 録音を自動停止後、間を置かず再度長押しして新しい録音を始めた場合、古いタイマーが新しい録音を誤って早期停止させないか
+
 アプリ起動後の LOG 画面ローディング改善（`lib/logsCache.ts` 新規・`lib/requestCache.ts` 新規・`lib/useApiGet.ts` / `components/RecordScreen.tsx` / `App.tsx` 変更）。LOG 先頭ページ+統計を AsyncStorage にキャッシュして起動時に即表示する stale-while-revalidate、INSIGHT の heatmap/themes/words をモジュールメモリでキャッシュしてタブ切替時のスケルトン再表示を防ぐ SWR、WORDS 取得の起動時遅延を追加した。JSロジック中心だがキャッシュ表示→ネットワーク差し替えの見た目・タイミングは実機でしか確認できないため以下が必要:
 
 - [ ] コールドスタート時、前回起動時の LOG 一覧・RECORDS/MINUTES/STREAK がスケルトンを経ずに即表示され、その後ネットワーク応答で最新内容に差し替わるか（新規投稿があれば反映されるか）
