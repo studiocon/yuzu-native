@@ -200,6 +200,20 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] 1分未満で自分から指を離した場合の挙動（既存の手動停止フロー）に回帰が無いか
 - [ ] 録音を自動停止後、間を置かず再度長押しして新しい録音を始めた場合、古いタイマーが新しい録音を誤って早期停止させないか
 
+アプリ起動後の LOG 画面ローディング改善（`lib/logsCache.ts` 新規・`lib/requestCache.ts` 新規・`lib/useApiGet.ts` / `components/RecordScreen.tsx` / `App.tsx` 変更）。LOG 先頭ページ+統計を AsyncStorage にキャッシュして起動時に即表示する stale-while-revalidate、INSIGHT の heatmap/themes/words をモジュールメモリでキャッシュしてタブ切替時のスケルトン再表示を防ぐ SWR、WORDS 取得の起動時遅延を追加した。JSロジック中心だがキャッシュ表示→ネットワーク差し替えの見た目・タイミングは実機でしか確認できないため以下が必要:
+
+- [ ] コールドスタート時、前回起動時の LOG 一覧・RECORDS/MINUTES/STREAK がスケルトンを経ずに即表示され、その後ネットワーク応答で最新内容に差し替わるか（新規投稿があれば反映されるか）
+- [ ] 別アカウントでログインし直したとき、前ユーザーの LOG・統計が一瞬でも表示されないか（`loadLogsCache` の userId 検証、および `App.tsx` の `SIGNED_OUT` での `clearLogsCache`/`clearRequestCache`）
+- [ ] 初回起動（キャッシュ無し）でも従来通りスケルトン→表示の流れが崩れていないか
+- [ ] LOG ⇄ INSIGHT のタブ切替を繰り返したとき、SIGNAL（heatmap）/ PATTERN（themes）/ WORDS が毎回スケルトンに戻らず、直近の内容がすぐ表示されるか（裏で再取得され、内容が更新されるタイミングがあれば違和感が無いか）
+- [ ] LOG のプルリフレッシュが従来通り動作し、キャッシュ追加後も二重更新やちらつきが無いか
+- [ ] LOG 詳細から開く WORDS 自動ハイライト（頻出語）が、起動直後の遅延後も正しく表示されるか（`RecordScreen.tsx` の `WORDS_FETCH_DELAY_MS`）
+- [ ] 21件以上の記録がある状態で起動直後にスクロールしても、キャッシュ由来の `nextOffset` 未設定により無限スクロールが誤発火しない（ネットワーク応答後は通常通り追加読み込みできる）か
+- [ ] コールドスタート後に INSIGHT タブを開いたとき、SIGNAL / WORDS / PATTERN / REPORTS の各セクションが前回起動時の内容で即表示され、その後ネットワーク応答で最新内容に差し替わるか（`requestCache` の AsyncStorage 永続化 + `RecordScreen` マウント時の `hydrateRequestCache`）
+- [ ] LOG ⇄ INSIGHT のタブ切替で REPORTS 一覧がスケルトンに戻らず、直近の内容がすぐ表示されるか（`InsightScreen` の reportsData を requestCache 対応にした分）
+- [ ] 別アカウントでログインし直したとき、前ユーザーの INSIGHT データ（heatmap/themes/words/reports）が一瞬でも表示されないか（`hydrateRequestCache` の userId 検証、`SIGNED_OUT` での `clearRequestCache` が AsyncStorage 側も消す）
+- [ ] レポート生成待ちの5秒ポーリング・未生成レポートの先読み POST・NEW バッジの初期シードに回帰が無いか（pregen と seed はキャッシュ由来の stale データでは発火せず、ネットワーク応答後にのみ発火するようゲートした）
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。

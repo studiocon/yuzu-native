@@ -17,6 +17,8 @@ import type { Session } from "@supabase/supabase-js";
 import { PostHogProvider } from "posthog-react-native";
 import { supabase } from "./lib/supabase";
 import { identify, posthogClient, resetIdentity, track } from "./lib/analytics";
+import { clearLogsCache } from "./lib/logsCache";
+import { clearRequestCache } from "./lib/requestCache";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingScreen from "./components/OnboardingScreen";
 import RecordScreen from "./components/RecordScreen";
@@ -78,8 +80,14 @@ function AppInner() {
         track("login_succeeded");
       }
       // ログアウト: distinctId をリセットして新しい匿名 ID を発行する。
+      // LOG キャッシュ（AsyncStorage）と INSIGHT のメモリキャッシュも消す。loadLogsCache は
+      // userId 一致チェックがあるため他ユーザーのデータが混入することは無いが、念のための保険。
+      // SettingsScreen の通常ログアウト・アカウント削除どちらも signOut() 経由でこのイベントを
+      // 発火させるので、ここ一箇所で両方をカバーできる。
       if (event === "SIGNED_OUT") {
         resetIdentity();
+        clearLogsCache().catch(() => {});
+        clearRequestCache();
       }
     });
 

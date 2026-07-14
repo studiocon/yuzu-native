@@ -4,6 +4,7 @@ import { apiFetch } from "../lib/apiFetch";
 import { API_BASE } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { useApiGet } from "../lib/useApiGet";
+import { getCached, setCached } from "../lib/requestCache";
 import { computeSentimentSeries } from "../lib/sentimentSeries";
 import { DAY_MS } from "../lib/period";
 import { EmotionSection } from "./EmotionChart";
@@ -20,6 +21,8 @@ const SENTIMENT_WINDOW_MS = 30 * DAY_MS;
 // REPORTS の生成待ちポーリング間隔・上限（サーバの非同期生成が終わるのを黙って待つ）。
 const REPORTS_POLL_INTERVAL_MS = 5000;
 const REPORTS_POLL_TIMEOUT_MS = 2 * 60 * 1000;
+// REPORTS 一覧の requestCache キー。useApiGet 系（heatmap/themes/words）と同じく URL 文字列。
+const REPORTS_URL = `${API_BASE}/api/reports?scope=all`;
 
 type Props = {
   posts: Post[];
@@ -60,20 +63,33 @@ export default function InsightScreen({ posts, scores, words }: Props) {
   );
   // REPORTS 一覧は独自管理（useApiGet だとポーリングの度に data が null に戻ってスケルトンへ
   // 戻ってしまうため、既存データを保持したまま裏で再取得できるよう手書きする）。
-  const [reportsData, setReportsData] = useState<ReportMeta[] | null>(null);
+  // 初期値は requestCache から取り（SWR）、タブ切替の再マウントでスケルトンに戻さない。
+  const [reportsData, setReportsData] = useState<ReportMeta[] | null>(
+    () => getCached<ReportMeta[]>(REPORTS_URL) ?? null,
+  );
   const [reportsError, setReportsError] = useState<string | null>(null);
+  // 表示中のデータがある（キャッシュ由来 or 取得済み）間は、再取得失敗を error に落とさず
+  // キャッシュ表示を維持する（useApiGet と同じ方針）。
+  const reportsHasDataRef = useRef(reportsData !== null);
+  // ネットワーク応答由来の reportsData が入ったか。キャッシュ由来の stale データで
+  // pregen（先読み POST）・既読 seed を発火させないためのゲート。
+  const [reportsNetworkLoaded, setReportsNetworkLoaded] = useState(false);
   const fetchReports = useCallback(async () => {
     try {
-      const res = await apiFetch(`${API_BASE}/api/reports?scope=all`);
+      const res = await apiFetch(REPORTS_URL);
       if (!res.ok) {
-        setReportsError("失敗、話せ");
+        if (!reportsHasDataRef.current) setReportsError("失敗、話せ");
         return;
       }
       const data = await res.json();
-      setReportsData(Array.isArray(data.reports) ? data.reports : []);
+      const reports: ReportMeta[] = Array.isArray(data.reports) ? data.reports : [];
+      setCached(REPORTS_URL, reports);
+      reportsHasDataRef.current = true;
+      setReportsData(reports);
       setReportsError(null);
+      setReportsNetworkLoaded(true);
     } catch {
-      setReportsError("失敗、話せ");
+      if (!reportsHasDataRef.current) setReportsError("失敗、話せ");
     }
   }, []);
   useEffect(() => {
@@ -89,23 +105,27 @@ export default function InsightScreen({ posts, scores, words }: Props) {
   // レポート一覧・ストレージ読み出しの両方が確定した最初のタイミングで、現在 generated な
   // 全 periodKey を既読として書き込む。狙い: 機能追加アップデート直後に既存レポートが
   // 全部 NEW になるのを防ぐ（新規ユーザーはレポートが無いので空 seed で無害）。
+  // キャッシュ由来の stale な一覧で seed すると、キャッシュ取得後に生成されたレポートの
+  // 既読が漏れる（永遠に NEW のまま等のずれ）ため、ネットワーク応答由来のデータでのみ発火する。
   const seedFiredRef = useRef(false);
   useEffect(() => {
     if (seedFiredRef.current) return;
-    if (reportsData === null) return;
+    if (reportsData === null || !reportsNetworkLoaded) return;
     if (!seenLoaded || seenKeys !== null) return;
     seedFiredRef.current = true;
     const initial = new Set(reportsData.filter((m) => m.generated).map((m) => m.periodKey));
     saveSeenKeys(initial).catch(() => {});
     setSeenKeys(initial);
-  }, [reportsData, seenLoaded, seenKeys]);
+  }, [reportsData, reportsNetworkLoaded, seenLoaded, seenKeys]);
 
   // yuzu-app の InsightView と同じく、未生成かつ投稿ありのレポートを背景で先読み生成する
   // （fire-and-forget POST。サーバは即 202 を返しバックグラウンドで生成を続ける）。
   // これでユーザーがカードをタップした時にはキャッシュが温まっており、詳細モーダルの GET が即ヒットする。
+  // POST 自体はサーバ側で冪等なので stale データで発火しても実害は無いが、キャッシュ由来だと
+  // 生成済みのレポートに無駄な POST を撃つことがあるため、ネットワーク応答由来でのみ発火する。
   const pregenFiredRef = useRef(false);
   useEffect(() => {
-    if (pregenFiredRef.current || reportsData === null) return;
+    if (pregenFiredRef.current || reportsData === null || !reportsNetworkLoaded) return;
     const pending = reportsData.filter((m) => !m.generated && m.postCount > 0).slice(0, 4);
     if (pending.length === 0) return;
     pregenFiredRef.current = true;
@@ -116,7 +136,7 @@ export default function InsightScreen({ posts, scores, words }: Props) {
         body: JSON.stringify({ scores }),
       }).catch(() => {});
     }
-  }, [reportsData, scores]);
+  }, [reportsData, reportsNetworkLoaded, scores]);
 
   // 生成待ちが残っている間は、カードが完了状態に切り替わるのを裏で定期的に確認する。
   // タブを離れずに待てるように（＝バッジ表示のまま自然に更新される）。上限を超えたら止める。
