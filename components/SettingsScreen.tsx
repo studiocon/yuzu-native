@@ -8,7 +8,7 @@ import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
 import { API_BASE } from "../lib/config";
-import { parseCurrentUser, type CurrentUser } from "../lib/currentUser";
+import { parseCurrentUser, planTypeLabel, type CurrentUser } from "../lib/currentUser";
 import { loadMockMode, setMockMode } from "../lib/mockMode";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
@@ -39,6 +39,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   // admin フラグをクライアントの永続状態として持ち回さない＝サーバ側の role が唯一の真実）。
   const me = useApiGet<CurrentUser>(visible ? `${API_BASE}/api/me` : null, parseCurrentUser);
   const isAdmin = me.data?.role === "admin";
+  const typeLabel = planTypeLabel(me.data, mockEnabled);
 
   useEffect(() => {
     if (!visible) return;
@@ -92,6 +93,7 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
         <ScrollView contentContainerStyle={styles.body}>
           <Section title="ACCOUNT">
             <Row label="メールアドレス" value={email} />
+            <Row label="種類" value={typeLabel} />
             <Pressable
               onPress={handleCopyId}
               accessibilityRole="button"
