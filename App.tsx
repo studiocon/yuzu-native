@@ -19,6 +19,7 @@ import { supabase } from "./lib/supabase";
 import { identify, posthogClient, resetIdentity, track } from "./lib/analytics";
 import { clearLogsCache } from "./lib/logsCache";
 import { clearRequestCache } from "./lib/requestCache";
+import { clearMockMode } from "./lib/mockMode";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingScreen from "./components/OnboardingScreen";
 import RecordScreen from "./components/RecordScreen";
@@ -88,6 +89,7 @@ function AppInner() {
         resetIdentity();
         clearLogsCache().catch(() => {});
         clearRequestCache();
+        clearMockMode();
       }
     });
 

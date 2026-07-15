@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
@@ -8,8 +8,11 @@ import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
 import { API_BASE } from "../lib/config";
+import { parseCurrentUser, type CurrentUser } from "../lib/currentUser";
+import { loadMockMode, setMockMode } from "../lib/mockMode";
 import { supabase } from "../lib/supabase";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
+import { useApiGet } from "../lib/useApiGet";
 import * as haptics from "../lib/haptics";
 import ApiTokenScreen from "./ApiTokenScreen";
 import ContactScreen from "./ContactScreen";
@@ -27,9 +30,26 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   const [contactOpen, setContactOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
+  const [mockEnabled, setMockEnabled] = useState(false);
 
   const email = session.user.email ?? "―";
   const shortId = session.user.id.slice(0, 8) + "...";
+
+  // role は毎回開くたびに /api/me を叩いて確認する（useApiGet の SWR キャッシュ経由。
+  // admin フラグをクライアントの永続状態として持ち回さない＝サーバ側の role が唯一の真実）。
+  const me = useApiGet<CurrentUser>(visible ? `${API_BASE}/api/me` : null, parseCurrentUser);
+  const isAdmin = me.data?.role === "admin";
+
+  useEffect(() => {
+    if (!visible) return;
+    loadMockMode().then(setMockEnabled);
+  }, [visible]);
+
+  async function handleToggleMockMode(next: boolean) {
+    haptics.tapLight();
+    setMockEnabled(next);
+    await setMockMode(next);
+  }
 
   async function handleCopyId() {
     await Clipboard.setStringAsync(session.user.id);
@@ -114,6 +134,22 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
               <CaretRightIcon size={14} color={colors.inkMuted} />
             </Pressable>
           </Section>
+
+          {isAdmin && (
+            <Section title="DEVELOPER">
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>モックモード</Text>
+                <View style={styles.rowTrailing}>
+                  <Switch
+                    value={mockEnabled}
+                    onValueChange={handleToggleMockMode}
+                    trackColor={{ false: colors.surfaceBorder, true: colors.yuzuZest }}
+                    accessibilityLabel="モックモード"
+                  />
+                </View>
+              </View>
+            </Section>
+          )}
 
           <Section title="SUPPORT">
             <Pressable

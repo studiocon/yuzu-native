@@ -16,6 +16,7 @@ import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
 import { loadLogsCache, saveLogsCache, type Stats } from "../lib/logsCache";
 import { hydrateRequestCache } from "../lib/requestCache";
+import { loadMockMode } from "../lib/mockMode";
 import type { Post } from "../lib/types";
 import type { WordFreq } from "../lib/insightTypes";
 import AppHeader from "./AppHeader";
@@ -168,6 +169,9 @@ export default function RecordScreen({ session }: { session: Session }) {
     // なければ従来のネットワーク待ちに自然フォールバックする。requestCache 側でメモリに
     // 既にあるキーは上書きしないため、ネットワーク応答とのレースも安全）。
     hydrateRequestCache(session.user.id).catch(() => {});
+    // 管理者限定モックモードの ON/OFF もここで復元する（apiFetch が同期的に参照するため、
+    // 以降の全リクエストが確定する前にモジュール変数へ反映しておく必要がある）。
+    loadMockMode().catch(() => {});
     let cancelled = false;
     loadLogsCache(session.user.id).then((cached) => {
       if (cancelled || !mountedRef.current || networkLoadedRef.current || !cached) return;
