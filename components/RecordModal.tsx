@@ -212,17 +212,24 @@ function ModalBody({
   const topStatus =
     permissionDenied ? "マイクを許可しろ" : statusText !== "" ? statusText : isBusy ? "CARVING" : isRecording ? "RECORDING" : "";
 
+  // CARVED（CompleteView 表示中）は下部に「閉じる」ボタンがあり、左上 X と機能が完全に重複する。
+  // 本文が伸びるほど固定位置の X が本文と重なってノイズになるため、この画面でだけ非表示にする。
+  // carvedPost が無い（本来起きない）フォールバック時は他フェーズと同じ扱いに戻す。
+  const showTopClose = !(isCarved && carvedPost);
+
   return (
     <>
-      <Pressable
-        onPress={onClose}
-        disabled={!canClose}
-        accessibilityRole="button"
-        accessibilityLabel="閉じる"
-        style={[styles.closeBtn, { top: insets.top + 12 }, !canClose && styles.closeBtnDisabled]}
-      >
-        <XIcon size={22} color={colors.ink} weight="bold" />
-      </Pressable>
+      {showTopClose && (
+        <Pressable
+          onPress={onClose}
+          disabled={!canClose}
+          accessibilityRole="button"
+          accessibilityLabel="閉じる"
+          style={[styles.closeBtn, { top: insets.top + 12 }, !canClose && styles.closeBtnDisabled]}
+        >
+          <XIcon size={22} color={colors.ink} weight="bold" />
+        </Pressable>
+      )}
 
       {isCarved && carvedPost ? (
         <CompleteView
