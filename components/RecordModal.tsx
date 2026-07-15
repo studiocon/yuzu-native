@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Dimensions, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Animated, Dimensions, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import type { AudioRecorder } from "expo-audio";
@@ -562,46 +562,58 @@ function CompleteView({
   const minutesView = useCountUp(totalMinutes, { delayMs: 1200 });
   const streakView = useCountUp(streak, { delayMs: 1200 });
 
+  // 録音本文は上限緩和（プラン差・admin 無制限）で長くなりうる。固定 flex View + gap では
+  // カードが伸びた分だけ下の「閉じる」がレイアウト外へ押し出され、タップ不能になっていた。
+  // 本文＋ストリークをスクロール領域に閉じ込め、「閉じる」だけ画面下部に固定フッターとして
+  // 分離することで、文字量に関わらず常にタップできる位置に留める。
   return (
-    <View style={[styles.completeView, { paddingTop: insets.top + 56, paddingBottom: 48 + bottomInset }]}>
-      <Text style={styles.completeStamp}>CARVED</Text>
-      <Text style={styles.completeIndex}>#{carvedPost.index}</Text>
-      <View style={styles.completeCard}>
-        <Text style={styles.completeText}>{carvedPost.text}</Text>
-      </View>
-
-      <View style={styles.streakBlock}>
-        <View style={styles.streakWeek}>
-          {week.map((d, i) => (
-            <View key={i} style={styles.streakDay}>
-              <Text style={styles.streakDayLabel}>{d.label}</Text>
-              <View style={[styles.streakCheck, d.done && styles.streakCheckDone, d.isToday && styles.streakCheckToday]}>
-                {d.done && <Text style={styles.streakCheckMark}>✓</Text>}
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.completeStats}>
-          <View style={styles.completeStatCard}>
-            <Text style={styles.completeStatLabel}>MINUTES</Text>
-            <Text style={styles.completeStatValue}>{minutesView}</Text>
-          </View>
-          <View style={styles.completeStatCard}>
-            <Text style={styles.completeStatLabel}>STREAK</Text>
-            <Text style={styles.completeStatValue}>{streakView}</Text>
-          </View>
-        </View>
-      </View>
-
-      <Pressable
-        onPress={onBack}
-        accessibilityRole="button"
-        accessibilityLabel="閉じる"
-        style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+    <View style={styles.completeRoot}>
+      <ScrollView
+        style={styles.completeScroll}
+        contentContainerStyle={[styles.completeScrollContent, { paddingTop: insets.top + 56 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.backBtnLabel}>閉じる</Text>
-      </Pressable>
+        <Text style={styles.completeStamp}>CARVED</Text>
+        <Text style={styles.completeIndex}>#{carvedPost.index}</Text>
+        <View style={styles.completeCard}>
+          <Text style={styles.completeText}>{carvedPost.text}</Text>
+        </View>
+
+        <View style={styles.streakBlock}>
+          <View style={styles.streakWeek}>
+            {week.map((d, i) => (
+              <View key={i} style={styles.streakDay}>
+                <Text style={styles.streakDayLabel}>{d.label}</Text>
+                <View style={[styles.streakCheck, d.done && styles.streakCheckDone, d.isToday && styles.streakCheckToday]}>
+                  {d.done && <Text style={styles.streakCheckMark}>✓</Text>}
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.completeStats}>
+            <View style={styles.completeStatCard}>
+              <Text style={styles.completeStatLabel}>MINUTES</Text>
+              <Text style={styles.completeStatValue}>{minutesView}</Text>
+            </View>
+            <View style={styles.completeStatCard}>
+              <Text style={styles.completeStatLabel}>STREAK</Text>
+              <Text style={styles.completeStatValue}>{streakView}</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={[styles.completeFooter, { paddingBottom: 48 + bottomInset }]}>
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="閉じる"
+          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+        >
+          <Text style={styles.backBtnLabel}>閉じる</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -688,7 +700,10 @@ const styles = StyleSheet.create({
   limitCount: { fontFamily: fonts.displayBold, fontSize: fontSize.xxxl, color: "#fff", letterSpacing: fontSize.xxxl * letterSpacing.wider, opacity: 0.9 },
   limitMsg: { fontFamily: fonts.bodyRegular, fontSize: fontSize.lg, lineHeight: fontSize.lg * 1.7, color: "rgba(255,255,255,0.75)", textAlign: "center" },
 
-  completeView: { flex: 1, width: "100%", alignItems: "center", paddingHorizontal: 24, gap: 28 },
+  completeRoot: { flex: 1, width: "100%", alignItems: "center" },
+  completeScroll: { flex: 1, width: "100%" },
+  completeScrollContent: { alignItems: "center", paddingHorizontal: 24, gap: 28, paddingBottom: 8 },
+  completeFooter: { width: "100%", alignItems: "center", paddingHorizontal: 24, paddingTop: 20 },
   completeStamp: { fontFamily: fonts.displayBlack, fontSize: 40, color: "#fff", letterSpacing: -0.8 },
   completeIndex: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: "#fff", marginTop: -16 },
   completeCard: { width: "100%", maxWidth: 420, backgroundColor: colors.ink, borderRadius: 2, padding: 22 },
