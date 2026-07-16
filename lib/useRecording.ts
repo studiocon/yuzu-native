@@ -39,6 +39,9 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   });
   const armedRef = useRef(false);
   const pendingReleaseRef = useRef(false);
+  // finishRecording の多重実行ガード（#11: handlePressOut / MAX_RECORD_MS タイマー / AppState 中断ハンドラの
+  // 複数経路から呼ばれ得るため、二重に stop() が走って例外を吐かないようにする）。
+  const finishingRef = useRef(false);
   const startedAtRef = useRef(0);
   const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recorderRef = useRef(recorder);
@@ -131,27 +134,52 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   }
 
   async function finishRecording() {
-    armedRef.current = false;
-    pendingReleaseRef.current = false;
-    clearAutoStopTimer();
-    setRecordingStartedAt(null);
-    await recorder.stop();
-    // iOS は録音セッション有効中は触覚を抑制するため、停止時に必ず解除する。
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+    // 既に別経路（手離し/自動停止タイマー/AppState 中断）で呼ばれ処理中なら何もしない。
+    // 二重呼び出しを許すと stop() の二重実行や phase の二重遷移につながる（#11）。
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    try {
+      armedRef.current = false;
+      pendingReleaseRef.current = false;
+      clearAutoStopTimer();
+      setRecordingStartedAt(null);
 
-    const uri = recorder.uri;
-    const durationMs = Date.now() - startedAtRef.current;
-    if (!uri) {
-      setPhase("error");
-      setStatusText("録音、失敗した");
-      haptics.error();
-      return;
+      // 通話割り込み・オーディオセッション競合・AppState ハンドラによる先行 stop() 後の
+      // 二度目呼び出しなどで stop() が reject し得る（#11）。ここで必ず捕まえ、
+      // 例外を fire-and-forget な呼び出し元（handlePressOut / 自動停止タイマー）に漏らさない。
+      let stopFailed = false;
+      if (recorder.isRecording) {
+        try {
+          await recorder.stop();
+        } catch {
+          stopFailed = true;
+        }
+      }
+      // iOS は録音セッション有効中は触覚を抑制するため、停止時に必ず解除する。
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+
+      const uri = recorder.uri;
+      const durationMs = Date.now() - startedAtRef.current;
+      if (!uri) {
+        // stop() が失敗していても uri が残っていれば下の分岐で処理を続行する（ベストエフォート復旧）。
+        // uri が無ければ復旧できないので error へ。中断由来か録音自体の失敗かでコピーを分ける。
+        setPhase("error");
+        setStatusText(stopFailed ? "中断された、もう一度" : "録音、失敗した");
+        haptics.error();
+        return;
+      }
+
+      // 録音停止 → 変換・保存中（CARVING）に入ったことを伝える軽いタップ。
+      // 実際に成功/失敗したかは後続の分岐でそれぞれ success()/error() を鳴らす。
+      haptics.tapLight();
+      setPhase("carving");
+      await runTranscription(uri, durationMs);
+    } finally {
+      finishingRef.current = false;
     }
+  }
 
-    // 録音停止 → 変換・保存中（CARVING）に入ったことを伝える軽いタップ。
-    // 実際に成功/失敗したかは後続の分岐でそれぞれ success()/error() を鳴らす。
-    haptics.tapLight();
-    setPhase("carving");
+  async function runTranscription(uri: string, durationMs: number) {
     try {
       const form = new FormData();
       form.append("audio", { uri, name: "recording.m4a", type: "audio/m4a" } as unknown as Blob);
