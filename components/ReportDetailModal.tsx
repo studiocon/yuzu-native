@@ -10,7 +10,7 @@ import { periodLabel } from "../lib/period";
 import * as haptics from "../lib/haptics";
 import EmotionChart from "./EmotionChart";
 import Skeleton from "./Skeleton";
-import type { ReportPayload } from "../lib/insightTypes";
+import { parseReportResponse, type ReportPayload } from "../lib/insightTypes";
 
 type Status = "loading" | "ok" | "no_posts" | "in_progress" | "error";
 type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed" | "error";
@@ -44,9 +44,12 @@ export default function ReportDetailModal({ periodKey, scores, onClose }: Props)
       if (getRes.status === 422) return "in_progress";
       if (getRes.status === 202) return "pending";
       if (getRes.ok) {
-        const data = (await getRes.json()) as { report?: { payload: ReportPayload } };
-        if (!data.report) return "error";
-        setPayload(data.report.payload);
+        const data = (await getRes.json()) as unknown;
+        // report 未添付・payload が実行時に不正な形（部分生成/スキーマ drift）なら
+        // TypeError で全画面クラッシュさせず、通常のエラー状態に落とす。
+        const payload = parseReportResponse(data);
+        if (!payload) return "error";
+        setPayload(payload);
         return "ok";
       }
       if (getRes.status === 404) return "not_generated";
@@ -76,12 +79,14 @@ export default function ReportDetailModal({ periodKey, scores, onClose }: Props)
           if (postRes.status === 404) return setStatus("no_posts");
           if (postRes.status === 422) return setStatus("in_progress");
           if (postRes.ok) {
-            const data = (await postRes.json()) as { report?: { payload: ReportPayload } };
-            if (data.report) {
+            const data = (await postRes.json()) as unknown;
+            const payload = parseReportResponse(data);
+            if (payload) {
               // すでにキャッシュ済みだった場合の即応答フォールバック
-              setPayload(data.report.payload);
+              setPayload(payload);
               return setStatus("ok");
             }
+            // report 未添付/不正形は「まだ無い」と同義に扱い、下のポーリングへ進む
           } else {
             return setStatus("error");
           }
