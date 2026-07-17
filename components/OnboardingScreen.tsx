@@ -93,6 +93,7 @@ export default function OnboardingScreen() {
         // limitReached=true 用の別ビューに迷い込ませないダミー値として安全に埋める）。
         remaining={1}
         maxDaily={1}
+        todayCount={0}
         limitReached={false}
         carvedPost={null}
         week={[]}
