@@ -1,4 +1,5 @@
-import { isReportUnread, parseSeenKeys } from "../reportSeen";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { clearSeenKeys, isReportUnread, loadSeenKeys, markReportSeen, parseSeenKeys } from "../reportSeen";
 
 describe("parseSeenKeys", () => {
   it("未保存（null）は null（＝要seed）", () => {
@@ -39,5 +40,19 @@ describe("isReportUnread", () => {
 
   it("generatedかつ未seenなら未読", () => {
     expect(isReportUnread({ generated: true, periodKey: "2026-w01" }, new Set())).toBe(true);
+  });
+});
+
+describe("clearSeenKeys", () => {
+  afterEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it("既読済み periodKey を削除し、以後 loadSeenKeys は null（未seed扱い）を返す", async () => {
+    await markReportSeen("2026-w01");
+    expect(await loadSeenKeys()).toEqual(new Set(["2026-w01"]));
+
+    await clearSeenKeys();
+    expect(await loadSeenKeys()).toBeNull();
   });
 });

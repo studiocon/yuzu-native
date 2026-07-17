@@ -24,3 +24,12 @@ export async function saveSentimentCache(cache: Record<string, number>): Promise
     // キャッシュ書き込み失敗は装飾機能のため無視してよい
   }
 }
+
+// ログアウト時: 別アカウントへ切り替わっても前ユーザーのセンチメントスコアを引き継がないようにする。
+export async function clearSentimentCache(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(SENTIMENT_CACHE_KEY);
+  } catch {
+    // 削除失敗は致命的ではない
+  }
+}
