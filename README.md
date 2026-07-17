@@ -214,6 +214,14 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] 別アカウントでログインし直したとき、前ユーザーの INSIGHT データ（heatmap/themes/words/reports）が一瞬でも表示されないか（`hydrateRequestCache` の userId 検証、`SIGNED_OUT` での `clearRequestCache` が AsyncStorage 側も消す）
 - [ ] レポート生成待ちの5秒ポーリング・未生成レポートの先読み POST・NEW バッジの初期シードに回帰が無いか（pregen と seed はキャッシュ由来の stale データでは発火せず、ネットワーク応答後にのみ発火するようゲートした）
 
+セッション/認証ライフサイクルのロバスト性を改善（`App.tsx` / `components/SettingsScreen.tsx` / `lib/largeSecureStore.ts` 新規）。(1) 起動タイムアウト（`STARTUP_TIMEOUT_MS`=5秒）超過時にセッションがまだ未確定なら、誤って `OnboardingScreen`（匿名操作可能）へ落とさず、非操作のプレースホルダ（スプラッシュと同じ配色・アイコン + RETRY ボタン）を出すようにした。(2) `SettingsScreen` の signOut を await + エラーチェックし、失敗時はモーダルを閉じずにエラー表示するようにした。(3) `LargeSecureStore.decrypt` を try/catch でガードし、壊れた blob は破棄して null を返すようにした（`lib/__tests__/largeSecureStore.test.ts` で実際に throw する壊れた hex 入力を使い単体検証済み）。低速回線・オフライン signOut・壊れたセッション永続化は実機でしか再現しづらいため以下が必要:
+
+- [ ] 低速回線（Network Link Conditioner 等で 5 秒超の遅延を再現）でログイン済み端末を起動したとき、一瞬でも `OnboardingScreen` が表示されず、RETRY 画面 → セッション確定後に自動で `RecordScreen` へ遷移するか
+- [ ] RETRY 画面で "RETRY" を押すと `getSession()` が再試行され、成功すればそのまま `RecordScreen`／`OnboardingScreen` に遷移するか
+- [ ] 機内モード等で完全にオフラインのまま起動タイムアウトを迎えた場合、RETRY 画面から抜けられない状態が続かないか（ネットワーク復帰後に RETRY で復旧できるか）
+- [ ] オフライン状態で設定画面からログアウトを試みたとき、モーダルが閉じずに「ログアウトできなかった。もう一度。」が表示され、再度オンラインでログアウトを押すと正常に閉じてオンボーディングに戻るか
+- [ ] アプリ削除・再インストールや OS の Keychain リセット等で `expo-secure-store` のエントリが壊れた状態を作れた場合、起動がクラッシュ/無限スプラッシュにならず未ログイン扱いで先に進むか（単体テストではロジックのみ検証、実際の Keychain 破損は再現困難）
+
 ## TestFlight 提出前チェックリスト
 
 コード側（lint / typecheck / test）は現状クリーン。CI（`.github/workflows/ci.yml`）で PR / main push ごとに typecheck・lint・test を自動実行するようになった。
