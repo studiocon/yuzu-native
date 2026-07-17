@@ -31,6 +31,8 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
   const [mockEnabled, setMockEnabled] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const email = session.user.email ?? "―";
   const shortId = session.user.id.slice(0, 8) + "...";
@@ -59,10 +61,25 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
     setTimeout(() => setIdCopied(false), 1500);
   }
 
-  function handleSignOut() {
+  // signOut() の結果を待たずに onClose() していたため、scope:"global" のサーバ側失敗
+  // （オフライン等）で SIGNED_OUT が発火せずセッションが残ったままなのに、UI は成功したかの
+  // ように閉じていた（#13）。await + エラーチェックし、失敗時はモーダルを閉じずに
+  // フィードバックを出す（App.tsx の SIGNED_OUT ハンドラは signOut 成功時のみ発火し、
+  // キャッシュクリア等はそちらに任せる）。
+  async function handleSignOut() {
     haptics.tapMedium();
-    onClose();
-    supabase.auth.signOut();
+    setSignOutError(null);
+    setSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      onClose();
+    } catch {
+      setSignOutError("ログアウトできなかった。もう一度。");
+      haptics.error();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -173,13 +190,15 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
           <Section title="">
             <Pressable
               onPress={handleSignOut}
-              style={({ pressed }) => [styles.dangerRow, pressed && styles.rowPressed]}
+              disabled={signingOut}
+              style={({ pressed }) => [styles.dangerRow, pressed && styles.rowPressed, signingOut && styles.rowDisabled]}
               accessibilityRole="button"
               accessibilityLabel="ログアウト"
             >
               <SignOutIcon size={16} color={colors.danger} weight="bold" />
-              <Text style={styles.dangerLabel}>ログアウト</Text>
+              <Text style={styles.dangerLabel}>{signingOut ? "ログアウト中…" : "ログアウト"}</Text>
             </Pressable>
+            {signOutError && <Text style={styles.confirmError}>{signOutError}</Text>}
             <Pressable
               onPress={() => {
                 haptics.warning();
@@ -364,6 +383,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.divider,
   },
   rowPressed: { backgroundColor: colors.surfaceHover },
+  rowDisabled: { opacity: 0.5 },
   rowLabel: { fontFamily: fonts.bodyRegular, fontSize: fontSize.base, color: colors.ink, flexShrink: 0 },
   rowTrailing: { flex: 1, flexShrink: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.xs, marginLeft: spacing.md },
   rowValue: { flexShrink: 1, fontSize: fontSize.sm, color: colors.inkMuted, textAlign: "right" },
