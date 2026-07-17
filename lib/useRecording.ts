@@ -96,32 +96,47 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     pendingReleaseRef.current = false;
     setStatusText("");
     setPermissionDenied(false);
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      setPhase("error");
-      setPermissionDenied(true);
-      haptics.warning();
-      return;
-    }
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    armedRef.current = true;
-    track("record_started");
-    startedAtRef.current = Date.now();
-    setPhase("recording");
-    onRecordingStart?.();
-    setRecordingStartedAt(startedAtRef.current);
-    haptics.tapMedium();
-    // 制限時間（MAX_RECORD_MS）に達したら、指を離していなくても自動で CARVING に入る。
-    clearAutoStopTimer();
-    autoStopTimerRef.current = setTimeout(() => {
-      autoStopTimerRef.current = null;
-      if (armedRef.current) finishRecording();
-    }, MAX_RECORD_MS);
+    // Pressable の onPressIn は fire-and-forget（RN は戻り値の Promise を待たない）。
+    // ここから record() までのどれか一つでも reject/throw すると、素の async 関数のままでは
+    // 誰にも捕まらず、ボタンが押しても反応しないまま無言で終わる（#14）。try/catch で必ず
+    // 拾い、既存の error phase / statusText 経路でユーザーに知らせる。
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        setPhase("error");
+        setPermissionDenied(true);
+        haptics.warning();
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      armedRef.current = true;
+      track("record_started");
+      startedAtRef.current = Date.now();
+      setPhase("recording");
+      onRecordingStart?.();
+      setRecordingStartedAt(startedAtRef.current);
+      haptics.tapMedium();
+      // 制限時間（MAX_RECORD_MS）に達したら、指を離していなくても自動で CARVING に入る。
+      clearAutoStopTimer();
+      autoStopTimerRef.current = setTimeout(() => {
+        autoStopTimerRef.current = null;
+        if (armedRef.current) finishRecording();
+      }, MAX_RECORD_MS);
 
-    if (pendingReleaseRef.current) {
-      await finishRecording();
+      if (pendingReleaseRef.current) {
+        await finishRecording();
+      }
+    } catch {
+      if (!mountedRef.current) return;
+      armedRef.current = false;
+      pendingReleaseRef.current = false;
+      clearAutoStopTimer();
+      setRecordingStartedAt(null);
+      setPhase("error");
+      setStatusText("録音できない、もう一度");
+      haptics.error();
     }
   }
 
