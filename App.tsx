@@ -20,6 +20,8 @@ import { identify, posthogClient, resetIdentity, track } from "./lib/analytics";
 import { clearLogsCache } from "./lib/logsCache";
 import { clearRequestCache } from "./lib/requestCache";
 import { clearMockMode } from "./lib/mockMode";
+import { clearSentimentCache } from "./lib/sentimentCache";
+import { clearSeenKeys } from "./lib/reportSeen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import OnboardingScreen from "./components/OnboardingScreen";
 import RecordScreen from "./components/RecordScreen";
@@ -83,6 +85,9 @@ function AppInner() {
       // ログアウト: distinctId をリセットして新しい匿名 ID を発行する。
       // LOG キャッシュ（AsyncStorage）と INSIGHT のメモリキャッシュも消す。loadLogsCache は
       // userId 一致チェックがあるため他ユーザーのデータが混入することは無いが、念のための保険。
+      // センチメントスコアのキャッシュ（sentimentCache）とレポート既読状態（reportSeen）も
+      // 同じ理由で消す：どちらも userId を保存しない素の AsyncStorage キーなので、消さないと
+      // 別アカウントへの切替時に前ユーザーのスコア・既読状態がそのまま漏れる。
       // SettingsScreen の通常ログアウト・アカウント削除どちらも signOut() 経由でこのイベントを
       // 発火させるので、ここ一箇所で両方をカバーできる。
       if (event === "SIGNED_OUT") {
@@ -90,6 +95,8 @@ function AppInner() {
         clearLogsCache().catch(() => {});
         clearRequestCache();
         clearMockMode();
+        clearSentimentCache().catch(() => {});
+        clearSeenKeys().catch(() => {});
       }
     });
 

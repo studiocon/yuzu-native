@@ -49,3 +49,12 @@ export async function markReportSeen(periodKey: string): Promise<void> {
   current.add(periodKey);
   await saveSeenKeys(current);
 }
+
+// ログアウト時: 別アカウントへ切り替わっても前ユーザーの既読状態を引き継がないようにする。
+export async function clearSeenKeys(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // 削除失敗は致命的ではない
+  }
+}
