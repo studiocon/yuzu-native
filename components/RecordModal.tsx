@@ -42,8 +42,10 @@ type Props = {
   /** 録音開始時刻（Date.now()）。録音中でなければ null。経過時間の算出用。 */
   recordingStartedAt: number | null;
   prompt: string;
-  remaining: number;
-  maxDaily: number;
+  // null = 無制限（admin）。残数・上限の概念が無いので表示しない。
+  remaining: number | null;
+  maxDaily: number | null;
+  todayCount: number;
   limitReached: boolean;
   carvedPost: CarvedPost | null;
   week: WeekDay[];
@@ -110,6 +112,7 @@ function ModalBody({
   prompt,
   remaining,
   maxDaily,
+  todayCount,
   limitReached,
   carvedPost,
   week,
@@ -242,7 +245,7 @@ function ModalBody({
         />
       ) : limitReached ? (
         <View style={styles.limitView}>
-          <Text style={styles.limitCount}>{maxDaily} / {maxDaily}</Text>
+          <Text style={styles.limitCount}>{todayCount} / {maxDaily}</Text>
           <Text style={styles.limitMsg}>今日はここまで。{"\n"}明日また話せ。</Text>
         </View>
       ) : (
@@ -267,7 +270,7 @@ function ModalBody({
             {(isIdleHero || isRecording) && promptVisible && (
               <Animated.Text style={[styles.promptText, { opacity: promptOpacity }]}>{prompt}</Animated.Text>
             )}
-            {isIdleHero && remaining < 3 && <Text style={styles.remaining}>{remaining} LEFT</Text>}
+            {isIdleHero && remaining !== null && remaining < 3 && <Text style={styles.remaining}>{remaining} LEFT</Text>}
 
             <View style={styles.micWrap}>
               {isRecording && (

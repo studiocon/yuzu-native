@@ -5,6 +5,7 @@
 // userId を一緒に保存し、読み出し時に一致しなければ null を返す。別アカウントでログイン
 // し直した端末で前ユーザーの LOG が一瞬でも表示されるのはプライバシー事故なので必須の検証。
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { jstDateString } from "./period";
 import type { Post } from "./types";
 
 export const LOGS_CACHE_KEY = "yuzu_logs_cache_v1";
@@ -12,7 +13,9 @@ export const LOGS_CACHE_KEY = "yuzu_logs_cache_v1";
 export type Stats = {
   streak: number;
   todayCount: number;
-  maxDaily: number;
+  // null = 無制限（admin）。サーバ（yuzu-app /api/records の maxDaily）は admin に null を返す。
+  // 0 に潰すと todayCount >= maxDaily が常に成立して録音が全面ブロックされるので number|null で持つ。
+  maxDaily: number | null;
   totalCount: number;
   totalMinutes: number;
 };
@@ -22,6 +25,9 @@ export type LogsCache = {
   posts: Post[];
   stats: Stats | null;
   firstPostAt: number | null;
+  // stats.todayCount を取得した JST 日付（YYYY-MM-DD）。日付を跨いだキャッシュの todayCount は
+  // 当日のものではないので、前日の回数で当日の録音をブロックしないために無効化する目印。
+  statsDate?: string | null;
 };
 
 function isStats(value: unknown): value is Stats {
@@ -30,7 +36,7 @@ function isStats(value: unknown): value is Stats {
   return (
     typeof v.streak === "number" &&
     typeof v.todayCount === "number" &&
-    typeof v.maxDaily === "number" &&
+    (v.maxDaily === null || typeof v.maxDaily === "number") &&
     typeof v.totalCount === "number" &&
     typeof v.totalMinutes === "number"
   );
@@ -57,6 +63,9 @@ function isLogsCache(value: unknown): value is LogsCache {
   if (!Array.isArray(v.posts) || !v.posts.every(isPost)) return false;
   if (v.stats !== null && !isStats(v.stats)) return false;
   if (v.firstPostAt !== null && typeof v.firstPostAt !== "number") return false;
+  // statsDate は後から足したフィールドなので、無い（undefined）旧キャッシュも受け入れる
+  // （読み出し側で「日付不明＝当日ではない」として todayCount を無効化する）。
+  if (v.statsDate !== undefined && v.statsDate !== null && typeof v.statsDate !== "string") return false;
   return true;
 }
 
@@ -69,15 +78,25 @@ export async function loadLogsCache(userId: string): Promise<LogsCache | null> {
     const parsed = JSON.parse(raw);
     if (!isLogsCache(parsed)) return null;
     if (parsed.userId !== userId) return null;
+    // JST の日付が変わっていれば todayCount は前日以前の値。そのまま返すと「今日はまだ
+    // 録音していないのに 1/1（上限到達）」と表示され録音がブロックされるので 0 に戻し、
+    // ネットワーク応答が来たら正しい値へ差し替えさせる。statsDate 未保存の旧キャッシュも同様。
+    if (parsed.stats && parsed.statsDate !== jstDateString(Date.now())) {
+      return { ...parsed, stats: { ...parsed.stats, todayCount: 0 } };
+    }
     return parsed;
   } catch {
     return null;
   }
 }
 
-export async function saveLogsCache(userId: string, data: Omit<LogsCache, "userId">): Promise<void> {
+export async function saveLogsCache(
+  userId: string,
+  data: Omit<LogsCache, "userId" | "statsDate">,
+): Promise<void> {
   try {
-    const payload: LogsCache = { userId, ...data };
+    // 保存時点の JST 日付を刻む（読み出し時に当日かどうかを判定するため）。
+    const payload: LogsCache = { userId, ...data, statsDate: jstDateString(Date.now()) };
     await AsyncStorage.setItem(LOGS_CACHE_KEY, JSON.stringify(payload));
   } catch {
     // キャッシュ書き込み失敗は装飾機能のため無視してよい

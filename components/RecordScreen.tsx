@@ -15,6 +15,14 @@ import { deriveNextIndex } from "../lib/carvingStage";
 import { track } from "../lib/analytics";
 import * as haptics from "../lib/haptics";
 import { loadLogsCache, saveLogsCache, type Stats } from "../lib/logsCache";
+import {
+  FALLBACK_MAX_DAILY,
+  isDailyLimitReached,
+  mergeStats,
+  parseMaxDaily,
+  remainingToday,
+  statsPatchFromResponse,
+} from "../lib/dailyLimit";
 import { hydrateRequestCache } from "../lib/requestCache";
 import { loadMockMode } from "../lib/mockMode";
 import type { Post } from "../lib/types";
@@ -33,16 +41,6 @@ import RecordModal from "./RecordModal";
 const WORDS_FETCH_DELAY_MS = 1000;
 
 type CarvedPost = { index: number; text: string };
-
-function mergeStats(prev: Stats | null, patch: Partial<Stats>): Stats {
-  return {
-    streak: patch.streak ?? prev?.streak ?? 0,
-    todayCount: patch.todayCount ?? prev?.todayCount ?? 0,
-    maxDaily: patch.maxDaily ?? prev?.maxDaily ?? 0,
-    totalCount: patch.totalCount ?? prev?.totalCount ?? 0,
-    totalMinutes: patch.totalMinutes ?? prev?.totalMinutes ?? 0,
-  };
-}
 
 export default function RecordScreen({ session }: { session: Session }) {
   const [tab, setTab] = useState<MainTab>("log");
@@ -63,7 +61,7 @@ export default function RecordScreen({ session }: { session: Session }) {
   // （帯域を records のネットワーク取得に譲る目的のため、キャッシュ即表示では早めない）。
   const [logsNetworkSettled, setLogsNetworkSettled] = useState(false);
 
-  const limitReached = stats !== null && stats.todayCount >= stats.maxDaily;
+  const limitReached = isDailyLimitReached(stats);
   const recording = useRecording({
     canStart: () => !limitReached,
     onRecordingStart: () => setCarvedPost(null),
@@ -138,7 +136,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         nextStats = {
           streak: data.streak,
           todayCount: data.todayCount ?? 0,
-          maxDaily: data.maxDaily ?? 0,
+          maxDaily: parseMaxDaily(data.maxDaily),
           totalCount: typeof data.totalCount === "number" ? data.totalCount : 0,
           totalMinutes: typeof data.totalDurationMs === "number" ? Math.floor(data.totalDurationMs / 60000) : 0,
         };
@@ -212,7 +210,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           recording.setPhase("carved");
           setRecordOpen(true); // CompleteView をそのまま見せる
           if (typeof data?.streak === "number") {
-            setStats((prev) => mergeStats(prev, { streak: data.streak, todayCount: data.todayCount, maxDaily: data.maxDaily }));
+            setStats((prev) => mergeStats(prev, statsPatchFromResponse(data)));
           }
           haptics.success();
           fetchLogs();
@@ -342,7 +340,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           track("daily_limit_hit");
           recording.setStatusText("今日はここまで");
           if (typeof saveData?.todayCount === "number") {
-            setStats((prev) => mergeStats(prev, { todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
+            setStats((prev) => mergeStats(prev, statsPatchFromResponse(saveData)));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
           recording.setStatusText("ログインし直せ");
@@ -356,7 +354,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       recording.setPhase("carved");
       setCarvedPost({ index: saveData.post.index, text: transcript });
       if (typeof saveData?.streak === "number") {
-        setStats((prev) => mergeStats(prev, { streak: saveData.streak, todayCount: saveData.todayCount, maxDaily: saveData.maxDaily }));
+        setStats((prev) => mergeStats(prev, statsPatchFromResponse(saveData)));
       }
       track("post_created", { durationMs: saveData.post.durationMs, charCount: saveData.post.char_count });
       haptics.success();
@@ -370,8 +368,9 @@ export default function RecordScreen({ session }: { session: Session }) {
   }
 
   // stats 未取得時のフォールバックはサーバ側の実際の上限（lib/constants.ts MAX_DAILY_SESSIONS）と揃える。
-  const maxDaily = stats?.maxDaily ?? 1;
-  const remaining = stats ? Math.max(0, stats.maxDaily - stats.todayCount) : maxDaily;
+  const maxDaily: number | null = stats ? stats.maxDaily : FALLBACK_MAX_DAILY;
+  const todayCount = stats?.todayCount ?? 0;
+  const remaining = remainingToday(maxDaily, todayCount);
   const chromeHidden = !!selectedPost || settingsOpen || recordOpen;
 
   // CompleteView 用の 7 日帯 + STREAK（サーバ値と client 計算の大きい方）。
@@ -418,6 +417,7 @@ export default function RecordScreen({ session }: { session: Session }) {
         prompt={prompt}
         remaining={remaining}
         maxDaily={maxDaily}
+        todayCount={todayCount}
         limitReached={limitReached}
         carvedPost={carvedPost}
         week={week}
