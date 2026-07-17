@@ -23,6 +23,7 @@ import {
   remainingToday,
   statsPatchFromResponse,
 } from "../lib/dailyLimit";
+import { parseSaveResponse } from "../lib/saveResponse";
 import { hydrateRequestCache } from "../lib/requestCache";
 import { loadMockMode } from "../lib/mockMode";
 import type { Post } from "../lib/types";
@@ -203,13 +204,24 @@ export default function RecordScreen({ session }: { session: Session }) {
         if (!mountedRef.current) return;
 
         if (res.ok) {
-          const data = await res.json();
+          // ok の時点でサーバの保存は成功している。body の JSON parse 失敗や post 欠損で
+          // ここが例外を投げると catch に落ちて「pending を残し次回再試行」に回ってしまい、
+          // 実際には保存済みなのに次回起動時にもう一度 POST して重複させるリスクがある
+          // （#14）。parse 失敗は空オブジェクト扱いにして必ず carved 側へ進める。
+          let data: unknown = null;
+          try {
+            data = await res.json();
+          } catch {
+            data = null;
+          }
           await clearPendingRecord();
           if (!mountedRef.current) return;
-          setCarvedPost({ index: data.post.index, text: pending.text });
+          const saved = parseSaveResponse(data);
+          setCarvedPost({ index: saved.index, text: pending.text });
           recording.setPhase("carved");
           setRecordOpen(true); // CompleteView をそのまま見せる
-          if (typeof data?.streak === "number") {
+          const streak = (data as { streak?: unknown } | null)?.streak;
+          if (typeof streak === "number") {
             setStats((prev) => mergeStats(prev, statsPatchFromResponse(data)));
           }
           haptics.success();
@@ -331,15 +343,25 @@ export default function RecordScreen({ session }: { session: Session }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: transcript, durationMs }),
       });
-      const saveData = await saveRes.json();
       if (!mountedRef.current) return;
+      // saveRes.ok の判定・エラーコード読み取りに body が要るので先に parse するが、
+      // JSON parse 自体が失敗しても（ok/status だけで）分岐を続行できるよう握り潰す
+      // （parse 失敗を outer catch に投げると saveRes.ok=true のケースまで「送れなかった」
+      // 表示になり、実際は保存済みなのに失敗扱いされる #14 の再発になる）。
+      let saveData: unknown = null;
+      try {
+        saveData = await saveRes.json();
+      } catch {
+        saveData = null;
+      }
+      const errCode = (saveData as { error?: unknown } | null)?.error;
       if (!saveRes.ok) {
         recording.setPhase("error");
-        const errCode = saveData?.error;
         if (errCode === "daily_limit") {
           track("daily_limit_hit");
           recording.setStatusText("今日はここまで");
-          if (typeof saveData?.todayCount === "number") {
+          const todayCount = (saveData as { todayCount?: unknown } | null)?.todayCount;
+          if (typeof todayCount === "number") {
             setStats((prev) => mergeStats(prev, statsPatchFromResponse(saveData)));
           }
         } else if (saveRes.status === 401 || errCode === "unauthorized") {
@@ -351,12 +373,19 @@ export default function RecordScreen({ session }: { session: Session }) {
         return;
       }
 
+      // ここに来た時点で saveRes.ok=true＝サーバの保存は成功している。body の形状が
+      // 壊れていても（post 欠損・parse 失敗）失敗扱いにしない。index が取れなければ 0 で
+      // 進め、直後の fetchLogs() が正しい値へ補正する（#14）。
       recording.setPhase("carved");
-      setCarvedPost({ index: saveData.post.index, text: transcript });
-      if (typeof saveData?.streak === "number") {
+      const saved = parseSaveResponse(saveData);
+      setCarvedPost({ index: saved.index, text: transcript });
+      const streak = (saveData as { streak?: unknown } | null)?.streak;
+      if (typeof streak === "number") {
         setStats((prev) => mergeStats(prev, statsPatchFromResponse(saveData)));
       }
-      track("post_created", { durationMs: saveData.post.durationMs, charCount: saveData.post.char_count });
+      if (saved.durationMs !== null && saved.charCount !== null) {
+        track("post_created", { durationMs: saved.durationMs, charCount: saved.charCount });
+      }
       haptics.success();
       fetchLogs();
     } catch {
