@@ -11,6 +11,7 @@ import * as haptics from "../lib/haptics";
 import EmotionChart from "./EmotionChart";
 import Skeleton from "./Skeleton";
 import { parseReportResponse, type ReportPayload } from "../lib/insightTypes";
+import { buildMockReportPayload } from "../lib/mockData";
 
 type Status = "loading" | "ok" | "no_posts" | "in_progress" | "error";
 type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed" | "error";
@@ -18,6 +19,7 @@ type FetchResult = "ok" | "pending" | "not_generated" | "in_progress" | "failed"
 type Props = {
   periodKey: string | null;
   scores: Record<string, number>;
+  mockOn: boolean;
   onClose: () => void;
 };
 
@@ -26,7 +28,7 @@ type Props = {
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_ATTEMPTS = 30; // 3s * 30 = 90s
 
-export default function ReportDetailModal({ periodKey, scores, onClose }: Props) {
+export default function ReportDetailModal({ periodKey, scores, mockOn, onClose }: Props) {
   const [status, setStatus] = useState<Status>("loading");
   const [payload, setPayload] = useState<ReportPayload | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -36,6 +38,17 @@ export default function ReportDetailModal({ periodKey, scores, onClose }: Props)
     let cancelled = false;
     setStatus("loading");
     setPayload(null);
+
+    if (mockOn) {
+      const mockPayload = buildMockReportPayload(periodKey);
+      if (mockPayload) {
+        setPayload(mockPayload);
+        setStatus("ok");
+      } else {
+        setStatus("error");
+      }
+      return;
+    }
 
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,9 +126,9 @@ export default function ReportDetailModal({ periodKey, scores, onClose }: Props)
     return () => {
       cancelled = true;
     };
-    // scores はキャプチャ依存（生成トリガーは periodKey/retryNonce のみ。新規スコア到着での再生成は不要）。
+    // scores はキャプチャ依存（生成トリガーは periodKey/retryNonce/mockOn のみ。新規スコア到着での再生成は不要）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodKey, retryNonce]);
+  }, [periodKey, retryNonce, mockOn]);
 
   if (!periodKey) return null;
 

@@ -193,6 +193,14 @@ LINE Seed JP（App/TTF、Regular/Bold の2ウェイトのみ）を `assets/fonts
 - [ ] `WordBubbleMap.tsx` の頻出語バブル内テキスト（`SvgText`、react-native-svg経由）がLINE Seed JP Boldで描画されるか（RNの`Text`とはフォント適用経路が異なるため個別確認）
 - [ ] フォント読み込み失敗時に `STARTUP_TIMEOUT_MS`（5秒）超過でも起動がフリーズせず先に進むか（`App.tsx` の既存フォールバック挙動の回帰確認）
 
+管理者限定モックモード（ストア用スクショ撮影用）で LOG/INSIGHT がモック内容にならない不具合を調査・修正。原因は yuzu-app バックエンドが `X-Yuzu-Mock` ヘッダーを一切見ておらず（grep で該当箇所ゼロ確認済み）、yuzu-app 側の「モックモード」は Web クライアントがローカルで表示を差し替えているだけの機構だったこと。ネイティブ側にサーバー契約が無いため、`lib/mockData.ts`（yuzu-app の `mockPosts.ts`/`mockReports.ts`/`themes.ts` を移植）を新設し、モック ON 時は LOG（posts/stats）・INSIGHT（heatmap/words/themes/reports/レポート詳細）を一切ネットワークに触れずローカル生成に置き換えた（`components/RecordScreen.tsx`, `InsightScreen.tsx`, `ReportDetailModal.tsx`）。純ロジック（`lib/period.ts` の `jstHour`/`recentClosedPeriods` 追加含む）は `lib/__tests__/mockData.test.ts` 等で green。画面表示のみの変更（録音・Haptics・AppState・SecureStore 不使用）だが、この開発環境には物理iPhone/Expo Goが無く（`react-native-web` 未導入で `expo start --web` も不可)実機確認が必要:
+
+- [ ] 設定画面でモックモードをONにし、アプリを完全に再起動（kill→再起動）した直後から LOG がモック投稿20件（本物でいろ、等）で表示されるか（起動直後の fetchLogs レース修正の確認）
+- [ ] INSIGHT タブで SIGNAL（ヒートマップ）・WORDS（バブル）・PATTERN（テーマ4件）・REPORTS（週次/月次カード）が全てモック内容で表示され、ネットワークエラー表示にならないか
+- [ ] REPORTS のカードをタップした時、詳細モーダルがポーリングなしで即座にモック本文（FACT/PROOF/SHADOW/ADVICE）を表示するか
+- [ ] モックON状態で LOG のプルリフレッシュ・MARKED フィルタ操作をしても実サーバーへの余計なリクエストが飛ばず、クラッシュや表示崩れが無いか
+- [ ] 設定画面でモックモードをOFFに戻すと、次のプルリフレッシュ/タブ再訪問で通常の実データ表示に戻るか
+
 録音の制限時間（`MAX_RECORD_MS`＝1分）到達時に自動で停止するよう `lib/useRecording.ts` に修正を入れた。従来は `RecordModal.tsx` のカウントダウン表示だけで、指を離さない限り実際の録音は止まらなかった不具合（1分を過ぎても録音が続く）を修正。`handlePressIn` で録音開始時に `setTimeout(MAX_RECORD_MS)` を張り、時間到達時点でまだ録音中（`armedRef`）なら `finishRecording()` を呼んで通常のリリース時と同じ CARVING 遷移に入る。バックグラウンド割り込み・手動リリース・アンマウントの各経路でタイマーを確実にクリアしている（多重発火・別セッションへの誤爆防止）。expo-audio の実録音挙動のため実機（またはExpo Go）での確認が必要:
 
 - [ ] 1分間長押しを維持したまま自然経過した場合、指を離さなくてもカウントダウンが0:00になった時点で自動的に録音が停止し CARVING に遷移するか（従来は録音が続いてしまっていた）

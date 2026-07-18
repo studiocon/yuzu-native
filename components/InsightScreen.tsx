@@ -14,8 +14,9 @@ import RecurringThemes, { RecurringThemesSkeleton } from "./RecurringThemes";
 import ReportCard, { ReportCardSkeleton } from "./ReportCard";
 import ReportDetailModal from "./ReportDetailModal";
 import { isReportUnread, loadSeenKeys, markReportSeen, saveSeenKeys } from "../lib/reportSeen";
+import { buildMockHeatmapCells, buildMockReportMetas, MOCK_THEMES } from "../lib/mockData";
 import type { Post } from "../lib/types";
-import type { HeatmapCell, ReportMeta, Theme, WordFreq } from "../lib/insightTypes";
+import { MIN_POSTS_FOR_THEMES, type HeatmapCell, type ReportMeta, type Theme, type WordFreq } from "../lib/insightTypes";
 
 const SENTIMENT_WINDOW_MS = 30 * DAY_MS;
 // REPORTS の生成待ちポーリング間隔・上限（サーバの非同期生成が終わるのを黙って待つ）。
@@ -28,9 +29,10 @@ type Props = {
   posts: Post[];
   scores: Record<string, number>;
   words: { data: WordFreq[] | null; error: string | null };
+  mockOn: boolean;
 };
 
-export default function InsightScreen({ posts, scores, words }: Props) {
+export default function InsightScreen({ posts, scores, words, mockOn }: Props) {
   const [openReport, setOpenReport] = useState<string | null>(null);
 
   // 既読 periodKey の集合（null=未ロード。未ロード中はチラつき防止のため未読バッジを出さない）。
@@ -53,14 +55,20 @@ export default function InsightScreen({ posts, scores, words }: Props) {
     return computeSentimentSeries(filtered, scores);
   }, [posts, scores]);
 
-  const heatmap = useApiGet<HeatmapCell[]>(
-    `${API_BASE}/api/insights/heatmap`,
+  const heatmapFetch = useApiGet<HeatmapCell[]>(
+    mockOn ? null : `${API_BASE}/api/insights/heatmap`,
     (r) => (Array.isArray(r.cells) ? (r.cells as HeatmapCell[]) : []),
   );
-  const themes = useApiGet<{ themes: Theme[]; notEnough: boolean }>(
-    `${API_BASE}/api/insights/themes`,
+  const heatmap = mockOn
+    ? { data: buildMockHeatmapCells(posts), error: null }
+    : heatmapFetch;
+  const themesFetch = useApiGet<{ themes: Theme[]; notEnough: boolean }>(
+    mockOn ? null : `${API_BASE}/api/insights/themes`,
     (r) => ({ themes: Array.isArray(r.themes) ? (r.themes as Theme[]) : [], notEnough: r.notEnough === true }),
   );
+  const themes = mockOn
+    ? { data: { themes: MOCK_THEMES, notEnough: posts.length < MIN_POSTS_FOR_THEMES }, error: null }
+    : themesFetch;
   // REPORTS 一覧は独自管理（useApiGet だとポーリングの度に data が null に戻ってスケルトンへ
   // 戻ってしまうため、既存データを保持したまま裏で再取得できるよう手書きする）。
   // 初期値は requestCache から取り（SWR）、タブ切替の再マウントでスケルトンに戻さない。
@@ -75,6 +83,14 @@ export default function InsightScreen({ posts, scores, words }: Props) {
   // pregen（先読み POST）・既読 seed を発火させないためのゲート。
   const [reportsNetworkLoaded, setReportsNetworkLoaded] = useState(false);
   const fetchReports = useCallback(async () => {
+    if (mockOn) {
+      const reports = buildMockReportMetas();
+      reportsHasDataRef.current = true;
+      setReportsData(reports);
+      setReportsError(null);
+      setReportsNetworkLoaded(true);
+      return;
+    }
     try {
       const res = await apiFetch(REPORTS_URL);
       if (!res.ok) {
@@ -91,7 +107,7 @@ export default function InsightScreen({ posts, scores, words }: Props) {
     } catch {
       if (!reportsHasDataRef.current) setReportsError("失敗、話せ");
     }
-  }, []);
+  }, [mockOn]);
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
@@ -225,6 +241,7 @@ export default function InsightScreen({ posts, scores, words }: Props) {
       <ReportDetailModal
         periodKey={openReport}
         scores={scores}
+        mockOn={mockOn}
         onClose={() => setOpenReport(null)}
       />
     </ScrollView>
