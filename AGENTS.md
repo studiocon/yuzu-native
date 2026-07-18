@@ -11,9 +11,12 @@
 
 Expo は変化が速く、学習時の知識が古い可能性が高い。`expo-*` パッケージの API に触る変更をするときは、`package.json` の `expo` メジャーバージョンに対応する versioned docs（`https://docs.expo.dev/versions/vXX.0.0/`）を参照する。
 
-## ボイス&トーン
+## デザイン
 
-正典は yuzu-app リポの `DESIGN.md` §4（VOICE & TONE）。到達方法: `../yuzu-app/DESIGN.md`。ローカルに無ければ GitHub `studiocon/yuzu-app` を参照する。UI 文言を作成・変更したら `copy-review` スキル（`.claude/skills/copy-review/`）で正典と照合する。
+`DESIGN.md`（このリポジトリのルート）は yuzu-app リポの `DESIGN.md` を移植したコピー。**正典は yuzu-app 側**で、ローカルの内容が古くなりうる（冒頭の「ネイティブ版での位置づけ」に元コミットハッシュと、ネイティブ側の意図的差分一覧を記載）。ローカルに無ければ `../yuzu-app/DESIGN.md`、それも無ければ GitHub `studiocon/yuzu-app` を参照する。
+
+- UI 文言（§4 VOICE & TONE）を作成・変更したら `copy-review` スキル（`.claude/skills/copy-review/`）で照合する
+- 色・シェイプ・コンポーネント・アニメーションなど見た目を作成・変更したら `design-review` スキル（`.claude/skills/design-review/`）で照合する
 
 ## 日付処理
 
@@ -28,6 +31,7 @@ Expo は変化が速く、学習時の知識が古い可能性が高い。`expo-
 | すべての変更 | `npm run typecheck` / `npm run lint` / `npm test` が green |
 | `lib/` の純ロジック | 上記に加え、該当ユニットテストの追加・更新 |
 | UI 文言の作成・変更 | `copy-review` スキルで正典照合 |
+| UI の見た目（色・シェイプ・コンポーネント・アニメーション）の作成・変更 | `design-review` スキルで正典照合 |
 | 画面・録音・ネイティブ挙動 | `verify-device` スキルで実機検証の要否を判定 |
 
 ## 学びの記録
