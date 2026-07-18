@@ -20,6 +20,9 @@ export function useSentimentScores(
   const [scores, setScores] = useState<Record<string, number>>({});
   const [hydrated, setHydrated] = useState(false);
   const mountedRef = useRef(true);
+  // レスポンス待ち中の id。posts が参照更新されるたびに effect が再発火しても、
+  // 同じ id へ多重にリクエストを飛ばさないためのガード（#27）。
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -39,9 +42,12 @@ export function useSentimentScores(
   useEffect(() => {
     if (!hydrated || posts.length === 0) return;
     const cutoff = Date.now() - SENTIMENT_WINDOW_MS;
-    const unresolved = posts.filter((p) => p.createdAt >= cutoff && !(p.id in scores));
+    const unresolved = posts.filter(
+      (p) => p.createdAt >= cutoff && !(p.id in scores) && !inFlightRef.current.has(p.id),
+    );
     if (unresolved.length === 0) return;
 
+    for (const p of unresolved) inFlightRef.current.add(p.id);
     let cancelled = false;
     (async () => {
       try {
@@ -65,6 +71,8 @@ export function useSentimentScores(
         });
       } catch {
         // silent: 次回再試行（スコアはあくまで装飾、無くても致命ではない）
+      } finally {
+        for (const p of unresolved) inFlightRef.current.delete(p.id);
       }
     })();
     return () => {
