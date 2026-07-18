@@ -50,8 +50,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "web": "expo start --web",
     "build:ios:preview": ". ./.env.eas.local 2>/dev/null; eas build --platform ios --profile preview",
     "build:ios:production": ". ./.env.eas.local 2>/dev/null; eas build --platform ios --profile production",
