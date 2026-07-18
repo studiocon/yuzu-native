@@ -12,9 +12,13 @@
       "supportsTablet": false,
       "bundleIdentifier": "style.yuzu.mobile",
       "icon": "./assets/YUZU.icon",
+      "appleTeamId": "DJN7Q8XTJB",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "声を録音し、文字起こしして日々の記録として保存するために使う。",
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.style.yuzu.mobile"]
       }
     },
     "android": {
@@ -52,7 +56,8 @@
       "expo-localization",
       "@react-native-community/datetimepicker",
       "./plugins/with-no-aps-environment",
-      "expo-notifications"
+      "expo-notifications",
+      "@bacons/apple-targets"
     ],
     "extra": {
       "eas": {

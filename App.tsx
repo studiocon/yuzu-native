@@ -23,6 +23,7 @@ import { clearRequestCache } from "./lib/requestCache";
 import { clearMockMode } from "./lib/mockMode";
 import { clearSentimentCache } from "./lib/sentimentCache";
 import { clearSeenKeys } from "./lib/reportSeen";
+import { updateWidgetSignal } from "./lib/widgetSignal";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "./lib/theme";
 import * as haptics from "./lib/haptics";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -119,6 +120,8 @@ function AppInner() {
         clearMockMode();
         clearSentimentCache().catch(() => {});
         clearSeenKeys().catch(() => {});
+        // SIGNAL ウィジェットも同じ理由でリセットする（他ユーザーの記録間隔を共有端末で見せない）。
+        updateWidgetSignal(null);
       }
     });
 
