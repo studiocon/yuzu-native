@@ -24,6 +24,8 @@ import { clearMockMode } from "./lib/mockMode";
 import { clearSentimentCache } from "./lib/sentimentCache";
 import { clearSeenKeys } from "./lib/reportSeen";
 import { updateWidgetSignal } from "./lib/widgetSignal";
+import { completeAuthRedirect } from "./lib/authSession";
+import * as Linking from "expo-linking";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "./lib/theme";
 import * as haptics from "./lib/haptics";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -134,6 +136,21 @@ function AppInner() {
       clearTimeout(timer);
       authSub.subscription.unsubscribe();
     };
+  }, []);
+
+  // OAuth（Google）のリダイレクトを拾うフォールバック。本来は AuthScreen 側の
+  // openAuthSessionAsync が直接 URL を受け取って処理するが、ユーザーがブラウザを
+  // 離れてから戻ってきた等で in-app browser の Promise が解決しないまま OS 側から
+  // 直接アプリが起動されるケースをここで拾う（cold start は getInitialURL、
+  // warm start は addEventListener）。認証と無関係な URL は何もしない。
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) completeAuthRedirect(url).catch(() => {});
+    });
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      completeAuthRedirect(url).catch(() => {});
+    });
+    return () => sub.remove();
   }, []);
 
   // onLayout は SafeAreaProvider のマウント時に発火するが、それに依存せず ready 成立時にも
