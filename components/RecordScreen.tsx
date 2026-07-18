@@ -27,6 +27,8 @@ import { parseSaveResponse } from "../lib/saveResponse";
 import { hydrateRequestCache } from "../lib/requestCache";
 import { loadMockMode } from "../lib/mockMode";
 import { updateWidgetSignal } from "../lib/widgetSignal";
+import { refreshReminderContent } from "../lib/reminder";
+import { DAY_MS } from "../lib/period";
 import type { Post } from "../lib/types";
 import type { WordFreq } from "../lib/insightTypes";
 import AppHeader from "./AppHeader";
@@ -130,7 +132,10 @@ export default function RecordScreen({ session }: { session: Session }) {
         charCount: p.char_count ?? 0,
       }));
       setLogs(mapped);
-      updateWidgetSignal(mapped.length > 0 ? Math.max(...mapped.map((p) => p.createdAt)) : null);
+      const lastPostAt = mapped.length > 0 ? Math.max(...mapped.map((p) => p.createdAt)) : null;
+      updateWidgetSignal(lastPostAt);
+      const daysSinceLastPost = lastPostAt === null ? 0 : Math.floor((Date.now() - lastPostAt) / DAY_MS);
+      refreshReminderContent(daysSinceLastPost).catch(() => {});
       setNextOffset(typeof data?.nextOffset === "number" ? data.nextOffset : null);
       const nextFirstPostAt = typeof data?.firstPostAt === "number" ? data.firstPostAt : firstPostAtRef.current;
       if (typeof data?.firstPostAt === "number") setFirstPostAt(data.firstPostAt);
