@@ -8,7 +8,7 @@ import { getCached, setCached } from "../lib/requestCache";
 import { computeSentimentSeries } from "../lib/sentimentSeries";
 import { DAY_MS } from "../lib/period";
 import { EmotionSection } from "./EmotionChart";
-import TimeHeatmap, { TimeHeatmapSkeleton } from "./TimeHeatmap";
+import DailyHeatmap, { DailyHeatmapSkeleton } from "./DailyHeatmap";
 import WordBubbleMap, { WordBubbleMapSkeleton } from "./WordBubbleMap";
 import RecurringThemes, { RecurringThemesSkeleton } from "./RecurringThemes";
 import ReportCard, { ReportCardSkeleton } from "./ReportCard";
@@ -158,9 +158,9 @@ export default function InsightScreen({ posts, scores, words }: Props) {
         {heatmap.error ? (
           <ErrorMsg message={heatmap.error} />
         ) : heatmap.data === null ? (
-          <TimeHeatmapSkeleton />
+          <DailyHeatmapSkeleton />
         ) : (
-          <TimeHeatmap cells={heatmap.data} />
+          <DailyHeatmap cells={heatmap.data} />
         )}
       </Section>
 
