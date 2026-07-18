@@ -26,6 +26,7 @@ import {
 import { parseSaveResponse } from "../lib/saveResponse";
 import { hydrateRequestCache } from "../lib/requestCache";
 import { loadMockMode } from "../lib/mockMode";
+import { buildMockPosts, buildMockScores, buildMockStats, MOCK_WORDS } from "../lib/mockData";
 import { updateWidgetSignal } from "../lib/widgetSignal";
 import { refreshReminderContent } from "../lib/reminder";
 import { DAY_MS } from "../lib/period";
@@ -64,6 +65,10 @@ export default function RecordScreen({ session }: { session: Session }) {
   // キャッシュ表示でも true になるため、WORDS 遅延の判定にはこちらを使う
   // （帯域を records のネットワーク取得に譲る目的のため、キャッシュ即表示では早めない）。
   const [logsNetworkSettled, setLogsNetworkSettled] = useState(false);
+  // 管理者限定モックモード。ON の間は LOG/INSIGHT の全データをネットワークに触れず
+  // lib/mockData.ts のローカル生成物で表示する（バックエンドは X-Yuzu-Mock を一切
+  // 見ておらず本物のデータを返し続けるため、表示側で完全にすり替える必要がある）。
+  const [mockOn, setMockOn] = useState(false);
 
   const limitReached = isDailyLimitReached(stats);
   const recording = useRecording({
@@ -88,23 +93,30 @@ export default function RecordScreen({ session }: { session: Session }) {
     firstPostAtRef.current = firstPostAt;
   }, [firstPostAt]);
 
-  const scores = useSentimentScores(logs, API_BASE);
+  // mockOn 中は logs がモック投稿なので実 API を叩かず、代わりに固定スコアを使う。
+  const rawScores = useSentimentScores(mockOn ? [] : logs, API_BASE);
+  const scores = mockOn ? buildMockScores() : rawScores;
   // WORDS 自動ハイライト用の頻出語（INSIGHT タブ未訪問でも LOG から詳細を開けるよう、ここで取得しておく）。
   // 起動直後の帯域を records 取得に譲るため、初回 fetchLogs 完了 or 一定時間のどちらか早い方まで遅らせる。
   const [wordsUrl, setWordsUrl] = useState<string | null>(null);
   useEffect(() => {
+    if (mockOn) return;
     if (logsNetworkSettled) {
       setWordsUrl(`${API_BASE}/api/insights/words`);
       return;
     }
     const timer = setTimeout(() => setWordsUrl(`${API_BASE}/api/insights/words`), WORDS_FETCH_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [logsNetworkSettled]);
+  }, [logsNetworkSettled, mockOn]);
   const words = useApiGet<WordFreq[]>(
-    wordsUrl,
+    mockOn ? null : wordsUrl,
     (r) => (Array.isArray(r.words) ? (r.words as WordFreq[]) : []),
   );
-  const topWords = useMemo(() => new Set((words.data ?? []).map((w) => w.word)), [words.data]);
+  const wordsForDisplay = mockOn ? { data: MOCK_WORDS, error: null } : words;
+  const topWords = useMemo(
+    () => new Set((wordsForDisplay.data ?? []).map((w) => w.word)),
+    [wordsForDisplay.data],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -114,6 +126,22 @@ export default function RecordScreen({ session }: { session: Session }) {
   }, []);
 
   const fetchLogs = useCallback(async () => {
+    // loadMockMode() は AsyncStorage 読み込みで非同期のため、ここで毎回 await して
+    // 最新値を確定させてから分岐する（起動直後の初回呼び出しと他 effect のロードが
+    // 競合しても、ここでは必ず永続化済みの値を見てから判断できる）。
+    if (await loadMockMode()) {
+      setMockOn(true);
+      networkLoadedRef.current = true;
+      const mockPosts = buildMockPosts();
+      setLogs(mockPosts);
+      setStats(buildMockStats());
+      setFirstPostAt(mockPosts.length > 0 ? mockPosts[mockPosts.length - 1].createdAt : null);
+      setNextOffset(null);
+      setLogsLoaded(true);
+      setLogsNetworkSettled(true);
+      return;
+    }
+    setMockOn(false);
     try {
       const res = await apiFetch(`${API_BASE}/api/records?limit=20`);
       if (!res.ok || !mountedRef.current) return;
@@ -291,6 +319,8 @@ export default function RecordScreen({ session }: { session: Session }) {
     setLogs((prev) => prev.map((l) => (l.id === id ? { ...l, marked } : l)));
     setSelectedPost((prev) => (prev && prev.id === id ? { ...prev, marked } : prev));
     haptics.tapLight();
+    // モック投稿はサーバー上に存在しないため、ローカル state の更新だけで完結させる。
+    if (mockOn) return;
     try {
       const res = await apiFetch(`${API_BASE}/api/records/${id}/mark`, {
         method: "PATCH",
@@ -435,7 +465,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           onLoadMore={loadMore}
         />
       ) : (
-        <InsightScreen posts={logs} scores={scores} words={words} />
+        <InsightScreen posts={logs} scores={scores} words={wordsForDisplay} mockOn={mockOn} />
       )}
 
       <View pointerEvents="box-none" style={[styles.chromeRow, { bottom: insets.bottom + spacing.md, left: insets.left + spacing.lg, right: insets.right + spacing.lg }]}>
