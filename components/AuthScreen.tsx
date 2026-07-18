@@ -10,10 +10,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+import { signInWithApple } from "../lib/appleAuth";
+import { signInWithGoogle } from "../lib/googleAuth";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
-type Step = "email" | "code";
+type Step = "select" | "email" | "code";
 
 // 厳密なRFC検証はしない。明らかに未完成な入力（@や.が無い等）だけ弾いて
 // 無駄な送信リクエストを減らすための軽いチェック。
@@ -25,12 +27,30 @@ type Props = {
 };
 
 export default function AuthScreen({ onBack }: Props = {}) {
-  const [step, setStep] = useState<Step>("email");
+  const [step, setStep] = useState<Step>("select");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const isEmailValid = EMAIL_PATTERN.test(email.trim());
+
+  async function handleApple() {
+    setLoading(true);
+    setError("");
+    const message = await signInWithApple();
+    setLoading(false);
+    if (message) setError(message);
+    // 成功時は App.tsx の onAuthStateChange が session を拾う
+  }
+
+  async function handleGoogle() {
+    setLoading(true);
+    setError("");
+    const message = await signInWithGoogle();
+    setLoading(false);
+    if (message) setError(message);
+    // 成功時は App.tsx の onAuthStateChange が session を拾う
+  }
 
   // ディープリンク（exp://）のリダイレクト一致が不安定なため、6桁コード入力に統一。
   // emailRedirectTo を渡さなければメールのリンクではなく数字コードが主導線になる。
@@ -76,7 +96,60 @@ export default function AuthScreen({ onBack }: Props = {}) {
             <Text style={styles.tagline}>BE TRUE</Text>
           </View>
 
-          {step === "email" ? (
+          {step === "select" ? (
+            <>
+              <Text style={styles.h2}>SIGN IN</Text>
+              <Text style={styles.sub}>声を刻め</Text>
+              {error !== "" && (
+                <Text style={styles.error} accessibilityLiveRegion="polite">{error}</Text>
+              )}
+              {Platform.OS === "ios" && (
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                  onPress={handleApple}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Appleで続ける"
+                >
+                  <Text style={styles.buttonLabel}>Apple で続ける</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={handleGoogle}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="Googleで続ける"
+              >
+                <Text style={styles.buttonLabel}>Google で続ける</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.buttonOutline, pressed && styles.buttonPressed]}
+                onPress={() => {
+                  haptics.tapLight();
+                  setStep("email");
+                }}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="メールで続ける"
+              >
+                <Text style={styles.buttonOutlineLabel}>メールで続ける</Text>
+              </Pressable>
+              {onBack && (
+                <Pressable
+                  onPress={() => {
+                    haptics.tapLight();
+                    onBack();
+                  }}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="戻る"
+                >
+                  <Text style={styles.back}>戻る</Text>
+                </Pressable>
+              )}
+            </>
+          ) : step === "email" ? (
             <>
               <Text style={styles.h2}>MAIL</Text>
               <Text style={styles.sub}>アドレスを入れろ</Text>
@@ -107,19 +180,18 @@ export default function AuthScreen({ onBack }: Props = {}) {
               >
                 <Text style={styles.buttonLabel}>{loading ? "送信中…" : "送れ"}</Text>
               </Pressable>
-              {onBack && (
-                <Pressable
-                  onPress={() => {
-                    haptics.tapLight();
-                    onBack();
-                  }}
-                  disabled={loading}
-                  accessibilityRole="button"
-                  accessibilityLabel="戻る"
-                >
-                  <Text style={styles.back}>戻る</Text>
-                </Pressable>
-              )}
+              <Pressable
+                onPress={() => {
+                  haptics.tapLight();
+                  setStep("select");
+                  setError("");
+                }}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="戻る"
+              >
+                <Text style={styles.back}>戻る</Text>
+              </Pressable>
             </>
           ) : (
             <>
@@ -221,6 +293,21 @@ const styles = StyleSheet.create({
   buttonPressed: { transform: [{ scale: 0.97 }] },
   buttonLabel: {
     color: colors.yuzuWhite,
+    fontFamily: fonts.bodyBold,
+    fontSize: fontSize.sm,
+    letterSpacing: fontSize.sm * letterSpacing.wider,
+  },
+  buttonOutline: {
+    borderWidth: 1,
+    borderColor: colors.ink,
+    borderRadius: radius.button,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    width: "100%",
+    alignItems: "center",
+  },
+  buttonOutlineLabel: {
+    color: colors.ink,
     fontFamily: fonts.bodyBold,
     fontSize: fontSize.sm,
     letterSpacing: fontSize.sm * letterSpacing.wider,

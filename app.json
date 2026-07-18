@@ -57,7 +57,9 @@
       "@react-native-community/datetimepicker",
       "./plugins/with-no-aps-environment",
       "expo-notifications",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     "extra": {
       "eas": {
