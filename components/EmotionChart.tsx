@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { GestureResponderEvent, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 import { colors, fontSize, fonts, letterSpacing, spacing } from "../lib/theme";
 import { SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
 import { WEEKDAY_JA } from "../lib/streak";
@@ -114,18 +114,8 @@ export default function EmotionChart({ data }: { data: SentimentPoint[] }) {
       {width > 0 && paths && (
         <Pressable onPress={handleChartPress} accessibilityLabel="日別の気分を見る" accessibilityRole="adjustable">
           <Svg width={width} height={CHART_H}>
-            <Defs>
-              <LinearGradient id="pos" x1="0" y1="0" x2="0" y2={CHART_H} gradientUnits="userSpaceOnUse">
-                <Stop offset="0" stopColor={SENTIMENT_POS} stopOpacity={0.62} />
-                <Stop offset="0.5" stopColor={SENTIMENT_POS} stopOpacity={0.18} />
-              </LinearGradient>
-              <LinearGradient id="neg" x1="0" y1="0" x2="0" y2={CHART_H} gradientUnits="userSpaceOnUse">
-                <Stop offset="0.5" stopColor={SENTIMENT_NEG} stopOpacity={0.18} />
-                <Stop offset="1" stopColor={SENTIMENT_NEG} stopOpacity={0.62} />
-              </LinearGradient>
-            </Defs>
-            <Path d={paths.posArea} fill="url(#pos)" />
-            <Path d={paths.negArea} fill="url(#neg)" />
+            <Path d={paths.posArea} fill={SENTIMENT_POS} />
+            <Path d={paths.negArea} fill={SENTIMENT_NEG} />
             {activePoint && <Circle cx={activePoint.x} cy={activePoint.y} r={5} fill={colors.ink} />}
           </Svg>
         </Pressable>
