@@ -9,6 +9,9 @@ import { buildDailyWeeks, type DailyCell } from "../lib/dailyHeatmap";
 const ROWS = 7;
 const CELL_GAP = 3;
 const SKELETON_COLS = 12;
+// buildDailyWeeks が16週固定なので通常は幅割りで ~17px に収まるが、列数が想定より
+// 減るケース（将来の仕様変更等）でセルが巨大化しないよう上限を掛けておく。
+const MAX_CELL = 20;
 
 // GitHub 風のコントリビューションカレンダー。1マス=1日、列=週(日曜始まり)。
 // TimeHeatmap（日×2時間バケット）の後継 — 時間帯という変化の乏しい軸を捨て、
@@ -56,7 +59,7 @@ export default function DailyHeatmap({ cells }: { cells: HeatmapCell[] }) {
   }
 
   const cols = weeks.length;
-  const cellSize = width > 0 ? (width - (cols - 1) * CELL_GAP) / cols : 0;
+  const cellSize = width > 0 ? Math.min((width - (cols - 1) * CELL_GAP) / cols, MAX_CELL) : 0;
 
   // 月が変わった週の先頭付近（1〜7日目を含む列）にだけラベルを出す（GitHub の月ラベルと同じ考え方）。
   const monthLabels: { label: string; colIdx: number }[] = [];

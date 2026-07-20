@@ -2,8 +2,14 @@
 // date は "YYYY-MM-DD" 文字列のみを扱う（時刻情報は無い）ので、UTC ms 上での
 // カレンダー演算に倒す — ローカルタイムゾーンや DST の影響を受けない。
 import type { HeatmapCell } from "./insightTypes";
+import { jstDateString } from "./period";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 表示範囲は「今日を含む週から遡って16週」で固定する。
+// データ範囲（初ログ〜最終ログ）に列数を委ねると、履歴が浅いユーザーで
+// 列が数本しかなくなり、セルが画面幅いっぱいに巨大化するため。
+export const WINDOW_WEEKS = 16;
 
 export type DailyCell = { date: string; charCount: number };
 
@@ -24,8 +30,13 @@ function dayOfWeek(date: string): number {
   return new Date(toUTCms(date)).getUTCDay();
 }
 
-// 週は日曜始まり。範囲外の穴（週の頭・尻）は null で埋め、7で割り切れる列に揃える。
-export function buildDailyWeeks(cells: HeatmapCell[]): {
+// 週は日曜始まり。「今日を含む週から遡って WINDOW_WEEKS 週」の固定範囲を描画する。
+// 初ログ以前・ログの無い日は charCount 0、今日より未来（今週の残り）は null で埋める。
+// 範囲より古いデータは切り捨てる。today は JST の "YYYY-MM-DD"（テスト用に注入可能）。
+export function buildDailyWeeks(
+  cells: HeatmapCell[],
+  today: string = jstDateString(Date.now())
+): {
   weeks: (DailyCell | null)[][];
   maxChars: number;
   hasAny: boolean;
@@ -36,9 +47,9 @@ export function buildDailyWeeks(cells: HeatmapCell[]): {
   for (const c of cells) {
     totals.set(c.date, (totals.get(c.date) ?? 0) + c.charCount);
   }
-  const dates = [...totals.keys()].sort();
-  const startMs = toUTCms(dates[0]);
-  const endMs = toUTCms(dates[dates.length - 1]);
+
+  const endMs = toUTCms(today);
+  const startMs = endMs - dayOfWeek(today) * DAY_MS - (WINDOW_WEEKS - 1) * 7 * DAY_MS;
 
   const days: DailyCell[] = [];
   let maxChars = 0;
@@ -51,13 +62,8 @@ export function buildDailyWeeks(cells: HeatmapCell[]): {
     if (charCount > 0) hasAny = true;
   }
 
-  const leadingPad = dayOfWeek(days[0].date);
   const trailingPad = 6 - dayOfWeek(days[days.length - 1].date);
-  const padded: (DailyCell | null)[] = [
-    ...Array(leadingPad).fill(null),
-    ...days,
-    ...Array(trailingPad).fill(null),
-  ];
+  const padded: (DailyCell | null)[] = [...days, ...Array(trailingPad).fill(null)];
 
   const weeks: (DailyCell | null)[][] = [];
   for (let i = 0; i < padded.length; i += 7) {
