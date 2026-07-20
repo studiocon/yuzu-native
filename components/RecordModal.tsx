@@ -208,6 +208,11 @@ function ModalBody({
   }, [promptVisible, promptOpacity]);
 
   const canClose = phase === "idle" || phase === "carved" || phase === "error";
+  // finishRecording は recordingStartedAt を null にした後、recorder.stop() 等の await を挟んでから
+  // phase を carving に進める。その間 isRecording のままだが elapsed は 0 にリセットされるため、
+  // isRecording だけでゲートするとカウントダウンが満タン（1:00）に戻って一瞬表示される。
+  // カウントダウン・進捗リングは「開始時刻が生きている間」だけ描画する。
+  const isRecordingLive = isRecording && recordingStartedAt !== null;
   const remainingMs = Math.max(0, MAX_RECORD_MS - recordingElapsed);
   const progress = Math.min(recordingElapsed / MAX_RECORD_MS, 1);
   const ringOffset = CIRC * (1 - progress);
@@ -257,7 +262,7 @@ function ModalBody({
               <Text style={[styles.speakTop, topStatus === "RECORDING" && styles.speakTopEn]}>{topStatus}</Text>
             )
           )}
-          {isRecording && <Text style={styles.timer}>{formatCountdown(remainingMs)}</Text>}
+          {isRecordingLive && <Text style={styles.timer}>{formatCountdown(remainingMs)}</Text>}
           {isBusy && <CarvingSteps nextIndex={nextIndex} reduceMotion={reduceMotion} />}
 
           <View style={styles.stage}>
@@ -273,7 +278,7 @@ function ModalBody({
             {isIdleHero && remaining !== null && remaining < 3 && <Text style={styles.remaining}>{remaining} LEFT</Text>}
 
             <View style={styles.micWrap}>
-              {isRecording && (
+              {isRecordingLive && (
                 <Svg width={116} height={116} style={styles.ring}>
                   <Circle cx={58} cy={58} r={RING} stroke="rgba(255,255,255,0.25)" strokeWidth={3} fill="none" />
                   <Circle
