@@ -6,16 +6,17 @@ private let appGroupID = "group.style.yuzu.mobile"
 private let lastRecordedKey = "lastRecordedAt"
 
 // DESIGN.md のトークンをそのまま埋め込む（--ink / --yuzu-yellow）。
-// 沈黙(黒)から信号(ゆず黄)へ、48時間かけて線形に染まる。文字は出さない。
+// 録音直後は信号(ゆず黄)が灯り、48時間の沈黙で線形にインク色へ消えていく。文字は出さない。
+// （当初は沈黙側が起点だったが、録音直後にほぼ黒＝故障と見分けがつかないため反転した）
 private let silenceRGB = (r: 0x1A, g: 0x1A, b: 0x2E)
 private let signalRGB = (r: 0xF5, g: 0xD8, b: 0x4A)
 private let fullSignalHours: Double = 48
 
 private func signalColor(elapsedHours: Double) -> Color {
     let t = min(max(elapsedHours / fullSignalHours, 0), 1)
-    let r = Double(silenceRGB.r) + (Double(signalRGB.r) - Double(silenceRGB.r)) * t
-    let g = Double(silenceRGB.g) + (Double(signalRGB.g) - Double(silenceRGB.g)) * t
-    let b = Double(silenceRGB.b) + (Double(signalRGB.b) - Double(silenceRGB.b)) * t
+    let r = Double(signalRGB.r) + (Double(silenceRGB.r) - Double(signalRGB.r)) * t
+    let g = Double(signalRGB.g) + (Double(silenceRGB.g) - Double(signalRGB.g)) * t
+    let b = Double(signalRGB.b) + (Double(silenceRGB.b) - Double(signalRGB.b)) * t
     return Color(red: r / 255, green: g / 255, blue: b / 255)
 }
 
@@ -36,8 +37,8 @@ struct SignalProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<SignalEntry>) -> Void) {
         let now = Date()
         guard let lastDate = lastRecordedDate() else {
-            // 未記録: 沈黙のまま。6時間後に再評価。
-            let entry = SignalEntry(date: now, elapsedHours: 0)
+            // 未記録: 信号は灯さず沈黙（インク色）のまま。6時間後に再評価。
+            let entry = SignalEntry(date: now, elapsedHours: fullSignalHours)
             completion(Timeline(entries: [entry], policy: .after(now.addingTimeInterval(6 * 3600))))
             return
         }
@@ -56,7 +57,7 @@ struct SignalProvider: TimelineProvider {
 
     private func currentEntry() -> SignalEntry {
         guard let lastDate = lastRecordedDate() else {
-            return SignalEntry(date: Date(), elapsedHours: 0)
+            return SignalEntry(date: Date(), elapsedHours: fullSignalHours)
         }
         return SignalEntry(date: Date(), elapsedHours: Date().timeIntervalSince(lastDate) / 3600)
     }
