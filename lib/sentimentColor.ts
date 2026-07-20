@@ -1,9 +1,14 @@
 // yuzu-app の lib/sentimentColor.ts を移植。
 // 感情スコア（-1.0〜1.0）→ 色 の共有スケール。SDK 非依存。
-// 端点の色は yuzu-app の app/globals.css :root トークンと一致させること。
+// 端点の色は yuzu-app の app/globals.css :root トークンと一致させること
+// （ただし POS はネイティブ側の意図的差分。DESIGN.md 冒頭の差分リスト参照）。
 
-/** +1.0（最ポジ）側の端点色。--yuzu-zest と一致。 */
-export const SENTIMENT_POS = "#E8A020";
+/**
+ * +1.0（最ポジ）側の端点色。--yuzu-yellow と一致。
+ * yuzu-app 正典は --yuzu-zest (#E8A020) だが、ネイティブは SIGNAL ウィジェット・
+ * ヒートマップと色言語を揃えるため YUZU イエローに意図的に乖離している。
+ */
+export const SENTIMENT_POS = "#F5D84A";
 /** -1.0（最ネガ）側の端点色。--mood-low と一致（紺）。 */
 export const SENTIMENT_NEG = "#2E3A66";
 /** 0（凪）の中立色。強い感情が無い状態。 */
@@ -35,7 +40,7 @@ const POS_RGB = hexToRgb(SENTIMENT_POS);
 
 /**
  * 感情スコアを色に写像する。
- * -1.0 = 紺 / 0 = 中立グレー / +1.0 = オレンジ を RGB 線形補間。
+ * -1.0 = 紺 / 0 = 中立グレー / +1.0 = ゆず黄 を RGB 線形補間。
  * score が未定義・非数（解析前のカード）は null を返す → 呼び出し側でバーを出さない。
  */
 export function sentimentColor(score: number | undefined | null): string | null {

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import { formatPeriodRange } from "../lib/period";
 import { sentimentColor, SENTIMENT_NEG, SENTIMENT_POS } from "../lib/sentimentColor";
@@ -64,6 +64,9 @@ export default function ReportCard({
   const avg = series.length > 0 ? series.reduce((s, p) => s + p.score, 0) / series.length : undefined;
   const edgeColor = sentimentColor(avg);
   const spark = buildSparkPaths(series);
+  // 複数カードが同時に描画されるため、SVG グラデーションの id はカードごとに一意にする。
+  const posGradId = `spark-pos-${meta.periodKey}`;
+  const negGradId = `spark-neg-${meta.periodKey}`;
 
   return (
     <Pressable
@@ -96,8 +99,19 @@ export default function ReportCard({
         // 縦横比を保ったまま中央にレターボックスされ、横幅いっぱいに広がらない
         // （yuzu-app の web 版は preserveAspectRatio="none" を明示している）。
         <Svg width="100%" height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" style={styles.spark}>
-          <Path d={spark.posArea} fill={SENTIMENT_POS} />
-          <Path d={spark.negArea} fill={SENTIMENT_NEG} />
+          {/* 不透明度は EmotionChart.tsx と同じ調整値（pos 0.85→0.22 / neg 0.18→0.62）。 */}
+          <Defs>
+            <LinearGradient id={posGradId} x1="0" y1="0" x2="0" y2={SPARK_H} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor={SENTIMENT_POS} stopOpacity={0.85} />
+              <Stop offset="0.5" stopColor={SENTIMENT_POS} stopOpacity={0.22} />
+            </LinearGradient>
+            <LinearGradient id={negGradId} x1="0" y1="0" x2="0" y2={SPARK_H} gradientUnits="userSpaceOnUse">
+              <Stop offset="0.5" stopColor={SENTIMENT_NEG} stopOpacity={0.18} />
+              <Stop offset="1" stopColor={SENTIMENT_NEG} stopOpacity={0.62} />
+            </LinearGradient>
+          </Defs>
+          <Path d={spark.posArea} fill={`url(#${posGradId})`} />
+          <Path d={spark.negArea} fill={`url(#${negGradId})`} />
         </Svg>
       )}
       {!meta.generated && (

@@ -61,9 +61,16 @@ cssVars:
 > - §12「メンテナンス（自動チェック）」の `npm run design:check` / CI は yuzu-app 専用。yuzu-native にはこの
 >   自動チェックは無い（`.claude/skills/design-review/` で手動レビューする。後述）。
 > - **ネイティブ側の意図的な差分**（正典から意図的に外れている箇所。取り込み漏れではない）:
->   - §6「感情分析チャート」（606行目付近）: yuzu-app は `<linearGradient>` の縦グラデーション塗りだが、
->     yuzu-native は単色 solid fill（`EmotionChart.tsx` / `ReportCard.tsx`）。色トークン（`--yuzu-zest` /
->     `--mood-low`）自体は共通。
+>   - §6「感情分析チャート」: ポジティブ側端点色 `SENTIMENT_POS` が正典の `--yuzu-zest` (#E8A020)
+>     ではなく `--yuzu-yellow` (#F5D84A)（`lib/sentimentColor.ts`）。SIGNAL ウィジェット・ヒートマップと
+>     色言語を揃えるための乖離で、共有スケールなので LOG 投稿カード左端バー・REPORTS エッジバーにも波及する。
+>     グラデーション構造（`<linearGradient>` 縦・ゼロラインに向かって減衰）は正典どおりだが、イエローは
+>     薄いと背景に溶けるため pos 側の不透明度を正典の 0.62→0.18 から 0.85→0.22 に変更している
+>     （`EmotionChart.tsx` / `ReportCard.tsx`。一時期は単色 solid fill だったが 2026-07-20 にグラデへ復帰）。
+>   - §6「時間帯ヒートマップ」（683行目付近）: yuzu-native の SIGNAL セクションは日×2時間バケットの
+>     `TimeHeatmap` ではなく、GitHub 風の日次カレンダー `DailyHeatmap`（`components/DailyHeatmap.tsx` /
+>     `lib/dailyHeatmap.ts`）。表示範囲は「今日を含む週から遡って16週」固定、セル上限 20px。
+>     セル色（投稿あり `--yuzu-yellow` opacity 0.2〜1.0 / なし `--divider`）は正典の思想を踏襲。
 
 # YUZU - Design Document
 
