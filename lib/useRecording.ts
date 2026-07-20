@@ -12,6 +12,8 @@ import * as haptics from "./haptics";
 import { track } from "./analytics";
 import { MAX_RECORD_MS, type ModalPhase } from "../components/RecordModal";
 
+const RECORD_TICK_MS = 20 * 1000;
+
 export type TranscribeOutcome =
   | { kind: "text"; text: string; durationMs: number }
   | { kind: "login_required" }
@@ -44,6 +46,9 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
   const finishingRef = useRef(false);
   const startedAtRef = useRef(0);
   const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 録音が続いていることを手に伝える定期の軽いタック（20秒間隔）。
+  // MAX_RECORD_MS=60秒なので実質 20秒・40秒の最大2回。
+  const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
   const mountedRef = useRef(true);
@@ -58,6 +63,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     return () => {
       mountedRef.current = false;
       if (autoStopTimerRef.current !== null) clearTimeout(autoStopTimerRef.current);
+      if (tickTimerRef.current !== null) clearInterval(tickTimerRef.current);
     };
   }, []);
 
@@ -68,6 +74,13 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
     }
   }
 
+  function clearTickTimer() {
+    if (tickTimerRef.current !== null) {
+      clearInterval(tickTimerRef.current);
+      tickTimerRef.current = null;
+    }
+  }
+
   // 電話/通知で割り込まれた時に録音状態のまま固まらないよう、バックグラウンド遷移で中断する。
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
@@ -75,6 +88,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       armedRef.current = false;
       pendingReleaseRef.current = false;
       clearAutoStopTimer();
+      clearTickTimer();
       setRecordingStartedAt(null);
       recorderRef.current
         .stop()
@@ -125,6 +139,12 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
         if (armedRef.current) finishRecording();
       }, MAX_RECORD_MS);
 
+      // 録音が続いている合図として20秒ごとに軽くタックを鳴らす。
+      clearTickTimer();
+      tickTimerRef.current = setInterval(() => {
+        if (armedRef.current) haptics.tapLight();
+      }, RECORD_TICK_MS);
+
       if (pendingReleaseRef.current) {
         await finishRecording();
       }
@@ -133,6 +153,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       armedRef.current = false;
       pendingReleaseRef.current = false;
       clearAutoStopTimer();
+      clearTickTimer();
       setRecordingStartedAt(null);
       setPhase("error");
       setStatusText("録音できない、もう一度");
@@ -157,6 +178,7 @@ export function useRecording({ canStart, onTranscribed, onRecordingStart }: Opti
       armedRef.current = false;
       pendingReleaseRef.current = false;
       clearAutoStopTimer();
+      clearTickTimer();
       setRecordingStartedAt(null);
 
       // 通話割り込み・オーディオセッション競合・AppState ハンドラによる先行 stop() 後の

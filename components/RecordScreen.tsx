@@ -259,7 +259,7 @@ export default function RecordScreen({ session }: { session: Session }) {
           if (typeof streak === "number") {
             setStats((prev) => mergeStats(prev, statsPatchFromResponse(data)));
           }
-          haptics.success();
+          haptics.celebrate();
           fetchLogs();
           return;
         }
@@ -423,7 +423,7 @@ export default function RecordScreen({ session }: { session: Session }) {
       if (saved.durationMs !== null && saved.charCount !== null) {
         track("post_created", { durationMs: saved.durationMs, charCount: saved.charCount });
       }
-      haptics.success();
+      haptics.celebrate();
       fetchLogs();
     } catch {
       if (!mountedRef.current) return;

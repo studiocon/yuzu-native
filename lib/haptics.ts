@@ -27,6 +27,17 @@ export function success(): void {
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 }
 
+/**
+ * 記録の保存が完了した瞬間の祝祭（CARVED）。
+ * expo-haptics に単発の「めでたい」プリミティブは無いため、
+ * Success 通知 → 軽→中の追い打ちで「ブルッ」と続く連鎖を合成する。
+ */
+export function celebrate(): void {
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 150);
+  setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 300);
+}
+
 /** 権限拒否・上限到達など、進めないが致命的ではない状態。 */
 export function warning(): void {
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
