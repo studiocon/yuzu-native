@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { signInWithApple } from "../lib/appleAuth";
 import { signInWithGoogle } from "../lib/googleAuth";
+import { PRIVACY_URL, TERMS_URL } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
 
@@ -148,6 +150,33 @@ export default function AuthScreen({ onBack }: Props = {}) {
                   <Text style={styles.back}>戻る</Text>
                 </Pressable>
               )}
+              <Text style={styles.legal}>
+                続けることで
+                <Text
+                  onPress={() => {
+                    haptics.tapLight();
+                    Linking.openURL(TERMS_URL);
+                  }}
+                  accessibilityRole="link"
+                  accessibilityLabel="利用規約を開く"
+                  style={styles.legalLink}
+                >
+                  利用規約
+                </Text>
+                と
+                <Text
+                  onPress={() => {
+                    haptics.tapLight();
+                    Linking.openURL(PRIVACY_URL);
+                  }}
+                  accessibilityRole="link"
+                  accessibilityLabel="プライバシーポリシーを開く"
+                  style={styles.legalLink}
+                >
+                  プライバシーポリシー
+                </Text>
+                に同意したものとみなす
+              </Text>
             </>
           ) : step === "email" ? (
             <>
@@ -313,4 +342,12 @@ const styles = StyleSheet.create({
     letterSpacing: fontSize.sm * letterSpacing.wider,
   },
   back: { fontFamily: fonts.bodyRegular, fontSize: fontSize.sm, color: colors.inkSecondary, marginTop: spacing.xs },
+  legal: {
+    fontFamily: fonts.bodyRegular,
+    fontSize: fontSize.xs,
+    color: colors.inkMuted,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  legalLink: { color: colors.ink, textDecorationLine: "underline" },
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
@@ -7,7 +7,7 @@ import { CaretLeftIcon, CaretRightIcon, SignOutIcon, TrashIcon } from "phosphor-
 import Constants from "expo-constants";
 import type { Session } from "@supabase/supabase-js";
 import { apiFetch } from "../lib/apiFetch";
-import { API_BASE } from "../lib/config";
+import { API_BASE, PRIVACY_URL, TERMS_URL } from "../lib/config";
 import { parseCurrentUser, planTypeLabel, type CurrentUser } from "../lib/currentUser";
 import { loadMockMode, setMockMode } from "../lib/mockMode";
 import { supabase } from "../lib/supabase";
@@ -185,7 +185,32 @@ export default function SettingsScreen({ visible, session, onClose }: Props) {
             </Pressable>
           </Section>
 
-          {/* LEGAL セクションはページ公開後に復活させる（審査対策で一時削除） */}
+          <Section title="LEGAL">
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                Linking.openURL(TERMS_URL);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="利用規約を開く"
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.rowLabel}>利用規約</Text>
+              <CaretRightIcon size={14} color={colors.inkMuted} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                haptics.tapLight();
+                Linking.openURL(PRIVACY_URL);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="プライバシーポリシーを開く"
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.rowLabel}>プライバシーポリシー</Text>
+              <CaretRightIcon size={14} color={colors.inkMuted} />
+            </Pressable>
+          </Section>
 
           <Section title="">
             <Pressable
