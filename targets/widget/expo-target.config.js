@@ -3,7 +3,11 @@
 // フォルダを WidgetKit extension target として ios/ にリンクする。
 module.exports = (config) => ({
   type: "widget",
-  name: "yuzu_signal",
+  // "_" 等の非英数字を含めると、Xcodeターゲット名（PBXNativeTarget.name、アンダースコア維持）と
+  // EAS側が突合に使うproductName（sanitizeNameForNonDisplayUseで非英数字除去済み）がズレて
+  // "Could not find target 'yuzusignal' in project.pbxproj" でproduction buildが必ず失敗する
+  // （@bacons/apple-targets のバグ、ローカルprebuildで再現・特定済み）。英数字のみにすること。
+  name: "yuzusignal",
   displayName: "SIGNAL",
   deploymentTarget: "16.0",
   frameworks: ["SwiftUI", "WidgetKit"],
