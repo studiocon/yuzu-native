@@ -71,6 +71,19 @@ cssVars:
 >     `TimeHeatmap` ではなく、GitHub 風の日次カレンダー `DailyHeatmap`（`components/DailyHeatmap.tsx` /
 >     `lib/dailyHeatmap.ts`）。表示範囲は「今日を含む週から遡って16週」固定、セル上限 20px。
 >     セル色（投稿あり `--yuzu-yellow` opacity 0.2〜1.0 / なし `--divider`）は正典の思想を踏襲。
+>   - 録音完了画面（[components/RecordModal.tsx](components/RecordModal.tsx) の `CompleteView`）: 正典は
+>     `RecordModal.tsx` 側の常時表示 top-left X（`record-modal-close`）と `CompleteView.tsx` 自身の
+>     bottom「閉じる」ボタン（`complete-back-btn`）を**両方同時に表示**するが、yuzu-native は bottom
+>     ボタンを廃止し top-left X 一本化（実機フィードバックで bottom ボタンの領域が広すぎると指摘され
+>     2026-07-21 に変更）。閉じる操作の到達手段は正典・native とも X アイコン + accessibilityLabel「閉じる」
+>     で共通。
+>   - サインイン画面ブランドヘッダー（[components/AuthScreen.tsx](components/AuthScreen.tsx)）: §3 フォント
+>     適用ルール（140行目付近、「ロゴ『YUZU』| Unbounded | 900」）はテキスト表現を規定するが、yuzu-native は
+>     `components/YuzuLogo.tsx`（`public/logo.svg` のベクターパスを react-native-svg で移植、ゆず黄バッジ+
+>     墨色ワードマーク）によるグラフィック表現に変更（2026-07-21）。正典 yuzu-app にはこの画面に直接対応する
+>     全画面ログインが無く（対応する `LoginModal.tsx` は既存ページ上のモーダルでブランド表現を持たない）比較
+>     対象が無いため、これは既存ルールからの新規逸脱として記録する。§3 のロゴテキスト規定はスタッツ数値・
+>     タブラベル等の他の Unbounded 用途には引き続き適用される。
 
 # YUZU - Design Document
 

@@ -220,34 +220,20 @@ function ModalBody({
   const topStatus =
     permissionDenied ? "マイクを許可しろ" : statusText !== "" ? statusText : isBusy ? "CARVING" : isRecording ? "RECORDING" : "";
 
-  // CARVED（CompleteView 表示中）は下部に「閉じる」ボタンがあり、左上 X と機能が完全に重複する。
-  // 本文が伸びるほど固定位置の X が本文と重なってノイズになるため、この画面でだけ非表示にする。
-  // carvedPost が無い（本来起きない）フォールバック時は他フェーズと同じ扱いに戻す。
-  const showTopClose = !(isCarved && carvedPost);
-
   return (
     <>
-      {showTopClose && (
-        <Pressable
-          onPress={onClose}
-          disabled={!canClose}
-          accessibilityRole="button"
-          accessibilityLabel="閉じる"
-          style={[styles.closeBtn, { top: insets.top + 12 }, !canClose && styles.closeBtnDisabled]}
-        >
-          <XIcon size={22} color={colors.ink} weight="bold" />
-        </Pressable>
-      )}
+      <Pressable
+        onPress={onClose}
+        disabled={!canClose}
+        accessibilityRole="button"
+        accessibilityLabel="閉じる"
+        style={[styles.closeBtn, { top: insets.top + 12 }, !canClose && styles.closeBtnDisabled]}
+      >
+        <XIcon size={22} color={colors.ink} weight="bold" />
+      </Pressable>
 
       {isCarved && carvedPost ? (
-        <CompleteView
-          carvedPost={carvedPost}
-          week={week}
-          totalMinutes={totalMinutes}
-          streak={streak}
-          bottomInset={insets.bottom}
-          onBack={onClose}
-        />
+        <CompleteView carvedPost={carvedPost} week={week} totalMinutes={totalMinutes} streak={streak} />
       ) : limitReached ? (
         <View style={styles.limitView}>
           <Text style={styles.limitCount}>{todayCount} / {maxDaily}</Text>
@@ -563,29 +549,27 @@ function CompleteView({
   week,
   totalMinutes,
   streak,
-  bottomInset,
-  onBack,
 }: {
   carvedPost: CarvedPost;
   week: WeekDay[];
   totalMinutes: number;
   streak: number;
-  bottomInset: number;
-  onBack: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const minutesView = useCountUp(totalMinutes, { delayMs: 1200 });
   const streakView = useCountUp(streak, { delayMs: 1200 });
 
-  // 録音本文は上限緩和（プラン差・admin 無制限）で長くなりうる。固定 flex View + gap では
-  // カードが伸びた分だけ下の「閉じる」がレイアウト外へ押し出され、タップ不能になっていた。
-  // 本文＋ストリークをスクロール領域に閉じ込め、「閉じる」だけ画面下部に固定フッターとして
-  // 分離することで、文字量に関わらず常にタップできる位置に留める。
+  // 録音本文は上限緩和（プラン差・admin 無制限）で長くなりうる。固定 flex View + gap のみだと
+  // カードが伸びた分だけ画面下端からはみ出すため、本文＋ストリークをスクロール領域に閉じ込める。
+  // 閉じる操作は画面共通の左上 X（RecordModal 本体側）に一本化し、専用フッターは持たない。
   return (
     <View style={styles.completeRoot}>
       <ScrollView
         style={styles.completeScroll}
-        contentContainerStyle={[styles.completeScrollContent, { paddingTop: insets.top + 56 }]}
+        contentContainerStyle={[
+          styles.completeScrollContent,
+          { paddingTop: insets.top + 56, paddingBottom: insets.bottom + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.completeStamp}>CARVED</Text>
@@ -618,17 +602,6 @@ function CompleteView({
           </View>
         </View>
       </ScrollView>
-
-      <View style={[styles.completeFooter, { paddingBottom: 48 + bottomInset }]}>
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="閉じる"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-        >
-          <Text style={styles.backBtnLabel}>閉じる</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -717,8 +690,7 @@ const styles = StyleSheet.create({
 
   completeRoot: { flex: 1, width: "100%", alignItems: "center" },
   completeScroll: { flex: 1, width: "100%" },
-  completeScrollContent: { alignItems: "center", paddingHorizontal: 24, gap: 28, paddingBottom: 8 },
-  completeFooter: { width: "100%", alignItems: "center", paddingHorizontal: 24, paddingTop: 20 },
+  completeScrollContent: { alignItems: "center", paddingHorizontal: 24, gap: 28 },
   completeStamp: { fontFamily: fonts.displayBlack, fontSize: 40, color: "#fff", letterSpacing: -0.8 },
   completeIndex: { fontFamily: fonts.displayBold, fontSize: fontSize.xxl, color: "#fff", marginTop: -16 },
   completeCard: { width: "100%", maxWidth: 420, backgroundColor: colors.ink, borderRadius: 2, padding: 22 },
@@ -752,7 +724,4 @@ const styles = StyleSheet.create({
   },
   completeStatLabel: { fontFamily: fonts.displayBold, fontSize: fontSize.xs, color: "rgba(255,255,255,0.6)", letterSpacing: fontSize.xs * letterSpacing.widest, textTransform: "uppercase" },
   completeStatValue: { fontFamily: fonts.displayBlack, fontSize: 44, color: "#fff", lineHeight: 44 },
-  backBtn: { backgroundColor: "#fff", paddingVertical: 14, paddingHorizontal: 36, borderRadius: 4 },
-  backBtnPressed: { transform: [{ scale: 0.97 }] },
-  backBtnLabel: { fontFamily: fonts.bodyBold, fontSize: fontSize.sm, color: colors.ink, letterSpacing: fontSize.sm * letterSpacing.wider },
 });
