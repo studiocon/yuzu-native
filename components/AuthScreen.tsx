@@ -16,6 +16,7 @@ import { signInWithGoogle } from "../lib/googleAuth";
 import { PRIVACY_URL, TERMS_URL } from "../lib/config";
 import { colors, fontSize, fonts, letterSpacing, radius, spacing } from "../lib/theme";
 import * as haptics from "../lib/haptics";
+import YuzuLogo from "./YuzuLogo";
 
 type Step = "select" | "email" | "code";
 
@@ -94,7 +95,7 @@ export default function AuthScreen({ onBack }: Props = {}) {
       >
         <View style={styles.body}>
           <View style={styles.brand}>
-            <Text style={styles.logo}>YUZU</Text>
+            <YuzuLogo width={160} />
             <Text style={styles.tagline}>BE TRUE</Text>
           </View>
 
@@ -278,11 +279,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   body: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.lg },
   brand: { alignItems: "center", gap: spacing.xs, marginBottom: spacing.md },
-  logo: {
-    fontFamily: fonts.displayBlack,
-    fontSize: fontSize.xxl,
-    color: colors.ink,
-  },
   tagline: {
     fontFamily: fonts.displayBold,
     fontSize: fontSize.xs,
